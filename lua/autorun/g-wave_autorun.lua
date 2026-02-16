@@ -17,6 +17,24 @@ end
 if CLIENT then
     GWAVE.Radios = {}
 
+    GWAVE.Font = surface.CreateFont( "GWaveFont", {
+        font = "Arial",
+        size = math.floor( 24 * ( ScrH() / 1080 ) ),
+        weight = 500,
+        antialias = true,
+        shadow = true,
+    } )
+
+    hook.Add( "OnScreenSizeChanged", "GWave_ResizeFont", function()
+        GWAVE.Font = surface.CreateFont( "GWaveFont", {
+            font = "Arial",
+            size = math.floor( 24 * ( ScrH() / 1080 ) ),
+            weight = 500,
+            antialias = true,
+            shadow = true,
+        } )
+    end )
+
     local function CreateRadio( parent )
         local radioObj = GWave.new()
         radioObj:SetParent( parent )

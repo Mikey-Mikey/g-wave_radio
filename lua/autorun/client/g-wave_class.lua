@@ -25,6 +25,7 @@ function GWave.new()
     self._radius = 1000
 
     self._queue = {} -- Queue for multiple urls
+    self._queueChanged = false
     self._current = nil -- The url of the currently playing audio
     self._state = "stopped"
     self._soundObject = nil
@@ -45,6 +46,7 @@ function GWave:Add( url )
         if IsValid( obj ) then
             self._queue[#self._queue + 1] = url
             self:Play()
+            self._queueChanged = true
             GWAVE.Print( "Added URL: " .. url )
             obj:Stop()
             obj = nil
@@ -76,6 +78,13 @@ function GWave:Play()
     end
 end
 
+--- Rewinds the radio
+function GWave:Rewind()
+    if IsValid( self._soundObject ) then
+        self._soundObject:SetTime( 0 )
+    end
+end
+
 --- Moves to the next audio in the queue
 function GWave:Next()
     if IsValid( self._soundObject ) then
@@ -85,14 +94,14 @@ function GWave:Next()
 
     self._current = nil
 
-    if self._queue[1] then
+    if self._queue[1] and self._state ~= "playing" then
         self._current = table.remove( self._queue, 1 )
         
         GWAVE.Print( self._current )
         local radio = self
         sound.PlayURL( self._current, "noplay 3d noblock", function( obj, errorID, errorName )
             if IsValid( obj ) then
-                print( radio._current )
+                self._queueChanged = true
                 GWAVE.Print( "Now Playing: " .. radio._current )
                 radio._soundObject = obj
                 radio:Play()
@@ -137,6 +146,7 @@ function GWave:Clear()
             self._soundObject = nil
         end
         self._queue = {}
+        self._queueChanged = true
     end
 end
 
@@ -206,20 +216,22 @@ function GWave:_think()
     end
 end
 
-local playMat = Material( "icon16/control_play.png" )
-local pauseMat = Material( "icon16/control_pause.png" )
-local skipMat = Material( "icon16/control_end.png" )
-local rewindMat = Material( "icon16/control_start.png" )
+local playMat = Material( "vgui/Play.png" )
+local pauseMat = Material( "vgui/Pause.png" )
+local skipMat = Material( "vgui/Skip.png" )
+local rewindMat = Material( "vgui/Rewind.png" )
 
 --- Opens the radio's menu
 function GWave:OpenRadioMenu()
     local radio = self
 
+    local queueChanged = false
+
     local scrW, scrH = ScrW(), ScrH()
     local dframe = vgui.Create( "DFrame" )
     dframe:SetSize( scrW * 0.6, scrH * 0.6 )
     dframe:Center()
-    dframe:SetTitle( "Radio Menu" )
+    dframe:SetTitle( "" )
     dframe:MakePopup()
     dframe:InvalidateParent( true )
 
@@ -260,65 +272,12 @@ function GWave:OpenRadioMenu()
     addButton.DoClick = function()
         self:Add( urlBar:GetValue() )
     end
-    local controlPanelH = dframe:GetWide() * 0.06
-    local controlPanelW = dframe:GetWide() * 0.2
-    local controlPanel = vgui.Create( "DPanel", dframe )
-    controlPanel:SetSize( controlPanelW, controlPanelH )
-    controlPanel:SetPos( dframe:GetWide() * 0.5 - controlPanelW * 0.5, dframe:GetTall() - controlPanelH )
-    controlPanel:InvalidateParent( true )
-
-    --- Rewind button
-    local rewindButton = vgui.Create( "DButton", controlPanel )
-    rewindButton:SetText( "" )
-    rewindButton:SetPos( 0, 16 )
-    rewindButton:SetSize( controlPanelH * 0.8, controlPanelH * 0.8 )
-    
-    function rewindButton:Paint( w, h )
-        surface.SetMaterial( rewindMat )
-        surface.DrawTexturedRect( 0, 0, w, h )
-    end
-    
-    
-
-    --- Pause/Play Button
-    local pausePlayButton = vgui.Create( "DButton", controlPanel )
-    pausePlayButton:SetText( "" )
-    pausePlayButton:SetPos( 48, 0 )
-    pausePlayButton:SetSize( controlPanelH, controlPanelH )
-
-    function pausePlayButton:Paint( w, h )
-        local mat = radio._state == "playing" and pauseMat or playMat
-        surface.SetMaterial( mat )
-        surface.DrawTexturedRect( 0, 0, w, h )
-    end
-
-    pausePlayButton.DoClick = function()
-        if self._state == "playing" then
-            self:Pause()
-        else
-            self:Play()
-        end
-    end
-
-    --- Skip Button
-    local skipButton = vgui.Create( "DButton", controlPanel )
-    skipButton:SetText( "" )
-    skipButton:SetPos( 64 + 48, 16 )
-    skipButton:SetSize( controlPanelH * 0.8, controlPanelH * 0.8 )
-
-    function skipButton:Paint( w, h )
-        surface.SetMaterial( skipMat )
-        surface.DrawTexturedRect( 0, 0, w, h )
-    end
-
-    skipButton.DoClick = function()
-        radio:Skip()
-    end
 
     --- Queue list
+    local queueH = dframe:GetTall() * 0.8
     local queueList = vgui.Create( "DScrollPanel", dframe )
     queueList:Dock( TOP )
-    queueList:SetTall( dframe:GetTall() * 0.8 )
+    queueList:SetTall( queueH )
     queueList:InvalidateParent( true )
     queueList:SetDrawBackground( false )
 
@@ -335,8 +294,6 @@ function GWave:OpenRadioMenu()
     function sbar.btnGrip:Paint(w, h)
         draw.RoundedBox( w / 2, 0, 0, w, h, Color(92, 97, 112) )
     end
-
-    local lastQueue = table.Copy( self._queue )
 
     function queueList:Paint( w, h )
         draw.RoundedBox( 4, 0, 0, w, h, Color( 21, 18, 27 ) )
@@ -387,31 +344,103 @@ function GWave:OpenRadioMenu()
 
             removeButton.DoClick = function()
                 table.remove( radio._queue, i )
-                UpdateList()
+                radio._queueChanged = true
             end
             
             queueList:AddItem( panel )
         end
-
         queueList:InvalidateLayout()
+        
     end
     UpdateList()
 
     function queueList:PaintOver( w, h )
-        local queueChanged = false
-        for i = 1, #radio._queue do
-            if radio._queue[i] ~= lastQueue[i] then
-                queueChanged = true
-                break
-            end
-        end
-        if queueChanged then
-            lastQueue = table.Copy( radio._queue )
-
+        if radio._queueChanged then
             UpdateList()
-
-            queueList:InvalidateLayout()
+            radio._queueChanged = false
         end
+    end
+
+    local controlPanelH = dframe:GetWide() * 0.04
+    local controlPanelW = dframe:GetWide() * 0.15
+    local controlPanelX = dframe:GetWide() * 0.5 - controlPanelW * 0.5
+    local controlPanelY = queueList:GetY() + queueList:GetTall()
+    local buttonSize = controlPanelH * 0.6
+    local buttonSpacing = controlPanelW * 0.4
+    local controlPanel = vgui.Create( "DPanel", dframe )
+    controlPanel:SetSize( controlPanelW, controlPanelH )
+    controlPanel:SetPos( controlPanelX, controlPanelY + ( dframe:GetTall() - controlPanelY ) * 0.5 - controlPanelH * 0.5 )
+    controlPanel:InvalidateParent( true )
+    
+    function controlPanel:Paint( w, h )
+        draw.RoundedBox( h * 0.5, 0, 0, w, h, Color( 18, 7, 37) )
+    end
+
+    --- Rewind button
+    local rewindButton = vgui.Create( "DButton", controlPanel )
+    rewindButton:SetText( "" )
+    rewindButton:SetPos( controlPanelW * 0.5 - buttonSpacing, controlPanelH * 0.5 - buttonSize * 0.5 )
+    rewindButton:SetSize( buttonSize, buttonSize )
+    
+    function rewindButton:Paint( w, h )
+        surface.SetMaterial( rewindMat )
+        surface.SetDrawColor( 126, 119, 189)
+        surface.DrawTexturedRect( 0, 0, w, h )
+    end
+
+    rewindButton.DoClick = function()
+        radio:Rewind()
+    end
+
+    --- Pause/Play Button
+    local pausePlayButton = vgui.Create( "DButton", controlPanel )
+    pausePlayButton:SetText( "" )
+    pausePlayButton:SetPos( controlPanelW * 0.5 - buttonSize * 0.5, controlPanelH * 0.5 - buttonSize * 0.5 )
+    pausePlayButton:SetSize( buttonSize, buttonSize )
+
+    function pausePlayButton:Paint( w, h )
+        local mat = radio._state == "playing" and pauseMat or playMat
+        surface.SetMaterial( mat )
+        surface.SetDrawColor( 126, 119, 189)
+        surface.DrawTexturedRect( 0, 0, w, h )
+    end
+
+    pausePlayButton.DoClick = function()
+        if self._state == "playing" then
+            self:Pause()
+        else
+            self:Play()
+        end
+    end
+
+    --- Skip Button
+    local skipButton = vgui.Create( "DButton", controlPanel )
+    skipButton:SetText( "" )
+    skipButton:SetPos( controlPanelW * 0.5 - buttonSize + buttonSpacing, controlPanelH * 0.5 - buttonSize * 0.5 )
+    skipButton:SetSize( buttonSize, buttonSize )
+
+    function skipButton:Paint( w, h )
+        surface.SetMaterial( skipMat )
+        surface.SetDrawColor( 126, 119, 189)
+        surface.DrawTexturedRect( 0, 0, w, h )
+    end
+
+    skipButton.DoClick = function()
+        radio:Next()
+    end
+
+    --- Currently Playing Audio
+    local currentAudio = vgui.Create( "DPanel", dframe )
+    currentAudio:SetSize( 400, controlPanelH )
+    currentAudio:SetPos( controlPanelX + controlPanelW, controlPanelY )
+
+    function currentAudio:Paint( w, h )
+        local txt = radio._current and getTitle( radio._current ) or "Nothing is playing..."
+        surface.SetFont( "GWaveFont" )
+        local textWidth, textHeight = surface.GetTextSize( txt )
+        self:SetPos( controlPanelX + controlPanelW * 1.1, ( controlPanelY + dframe:GetTall() ) * 0.5 - textHeight * 0.5 )
+
+        draw.SimpleText( txt, "GWaveFont", 0, 0, color_white )
     end
     
 end
