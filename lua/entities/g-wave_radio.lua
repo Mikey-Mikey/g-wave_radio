@@ -283,7 +283,7 @@ if CLIENT then
                 realVolume = realVolume * math.max( 0.5, ( math.min( dot, 0 ) + 1 ) )
                 realVolume = realVolume * GWAVE.VolumeMultiplier:GetFloat()
 
-                self._AudioChannel:SetVolume( realVolume )
+                self._AudioChannel:SetVolume( realVolume * GWAVE.VolumeMultiplier:GetFloat() )
             end
 
             self._AudioChannel:SetPlaybackRate( self.PlaybackRate )
