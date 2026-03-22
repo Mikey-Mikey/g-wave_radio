@@ -540,7 +540,11 @@ function GWave.OpenRadioMenu( radio, queue )
     end
 
     rewindButton.DoClick = function()
-        ErrorNoHalt( "Clicked Rewind. State: " .. radio._state .. "\n" )
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.TIME, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.WriteFloat( 0 )
+        net.SendToServer()
     end
 
     --- Pause/Play Button
@@ -578,12 +582,15 @@ function GWave.OpenRadioMenu( radio, queue )
 
     function skipButton:Paint( w, h )
         surface.SetMaterial( skipMat )
-        surface.SetDrawColor( 126, 119, 189)
+        surface.SetDrawColor( 126, 119, 189 )
         surface.DrawTexturedRect( 0, 0, w, h )
     end
 
     skipButton.DoClick = function()
-        ErrorNoHalt( "Clicked Skip. State: " .. radio._state .. "\n" )
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.SendToServer()
     end
 
     --- Currently Playing Audio

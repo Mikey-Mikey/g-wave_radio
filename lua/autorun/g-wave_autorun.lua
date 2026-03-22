@@ -8,7 +8,8 @@ GWAVE.OPCODES = {
     OPEN = 4,
     PLAY = 5,
     PAUSE = 6,
-    NEXT = 7
+    SKIP = 7,
+    TIME = 8,
 }
 
 GWAVE.OPCODECOUNT = math.ceil( math.log( table.Count( GWAVE.OPCODES ) + 1, 2 ) )

@@ -52,6 +52,11 @@ function ENT:SetupDataTables()
                 if not url or url == "" then return end
                 if not self:GetPlaying() then return end
 
+                if IsValid( self._AudioChannel ) then
+                    self._AudioChannel:Stop()
+                    self._AudioChannel = nil
+                end
+
                 sound.PlayURL( url, "noplay 3d noblock", function( station )
                     if not IsValid( station ) then return end
                     self._AudioChannel = station
@@ -155,13 +160,18 @@ if SERVER then
     end
 
     function ENT:PlayNextSong()
+        if #self.Queue == 0 then
+            self:SetPlaying( false )
+            self:SetState( "stopped" )
+            return
+        end
+
         local current = self:RemoveFromQueue( 1 )
         self:SetURL( current.url .. "|" .. os.time() )
         self:SetDuration( current.duration )
         self:SetPlaying( true )
         self:SetState( "playing" )
         self:SetStartTime( 0 )
-        print( "Playing ", current.url )
     end
 
     function ENT:SpawnFunction( ply, tr )
@@ -217,15 +227,36 @@ if SERVER then
         elseif opcode == GWAVE.OPCODES.PAUSE then
             radio:SetPlaying( false )
             radio:SetState( "paused" )
-        elseif opcode == GWAVE.OPCODES.NEXT then
+        elseif opcode == GWAVE.OPCODES.SKIP then
             if #radio:GetQueue() > 0 then
                 radio:PlayNextSong()
             end
+        elseif opcode == GWAVE.OPCODES.TIME then
+            local time = net.ReadFloat()
+            net.Start( "gwave_operation" )
+            net.WriteUInt( GWAVE.OPCODES.TIME, GWAVE.OPCODECOUNT )
+            net.WriteEntity( radio )
+            net.WriteFloat( time )
+            net.Broadcast()
+            radio:SetStartTime( time )
         end
     end )
 end
 
 if CLIENT then
+    net.Receive( "gwave_operation", function()
+        local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
+        local radio = net.ReadEntity()
+        if not IsValid( radio ) then return end
+
+        if opcode == GWAVE.OPCODES.TIME then
+            local time = net.ReadFloat()
+            if radio._AudioChannel then
+                radio._AudioChannel:SetTime( time )
+            end
+        end
+    end )
+
     function ENT:OnRemove( fullUpdate )
         --if not fullUpdate then return end
 
@@ -290,7 +321,7 @@ if CLIENT then
             if self._queue and #self._queue > 0 and not self.ChangingSong then
                 self.ChangingSong = true
                 net.Start( "gwave_operation" )
-                net.WriteUInt( GWAVE.OPCODES.NEXT, GWAVE.OPCODECOUNT )
+                net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
                 net.WriteEntity( self )
                 net.SendToServer()
             end
@@ -302,3 +333,4 @@ if CLIENT then
         self:DrawModel()
     end
 end
+
