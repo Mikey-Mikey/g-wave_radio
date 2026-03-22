@@ -27,55 +27,6 @@ if SERVER then
     util.AddNetworkString( "gwave_operation" )
     util.AddNetworkString( "gwave_openmenu" )
     util.AddNetworkString( "gwave_syncqueue" )
-    --[[
-    net.Receive( "gwave_operation", function( _, ply )
-        local opcode = net.ReadUInt( 3 )
-        if opcode == GWAVE.OPCODES.ADD then
-            local ent = net.ReadEntity()
-            if not IsValid( ent ) then return end
-            if ent:GetDataCreator() ~= ply then return end
-
-            local url = net.ReadString()
-            local title = net.ReadString()
-            ent:AddToQueue( url, title )
-        end
-
-        if opcode == GWAVE.OPCODES.PLAY then
-            local ent = net.ReadEntity()
-            if not IsValid( ent ) then return end
-            if ent:GetDataCreator() ~= ply then return end
-            ent:SetState( "playing" )
-            ent:SetPlaying( true )
-            ent:SetStartTime( CurTime() )
-        end
-
-        if opcode == GWAVE.OPCODES.PAUSE then
-            local ent = net.ReadEntity()
-            if not IsValid( ent ) then return end
-            if ent:GetDataCreator() ~= ply then return end
-            ent:SetState( "paused" )
-            ent:SetPlaying( false )
-        end
-
-        if opcode == GWAVE.OPCODES.REMOVE then
-            local ent = net.ReadEntity()
-            if not IsValid( ent ) then return end
-            if ent:GetDataCreator() ~= ply then return end
-
-            local index = net.ReadUInt( 4 )
-            ent:RemoveFromQueue( index )
-        end
-
-        if opcode == GWAVE.OPCODES.CLEAR then
-            local ent = net.ReadEntity()
-            if not IsValid( ent ) then return end
-            if ent:GetDataCreator() ~= ply then return end
-
-            ent:ClearQueue()
-            ent:SetState( "stopped" )
-        end
-    end )
-    ]]
 end
 
 if CLIENT then
