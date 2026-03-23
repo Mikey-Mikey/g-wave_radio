@@ -18,9 +18,11 @@ local function getTitle( path )
     -- Returns the Path, Filename, and Extension as 3 values
     local _, title = string.match( path, "^(.-)([^\\/]-)(%.[^\\/%.]-)%.?$" )
 
-    --if string.find( path, "discord" ) then
+    if not title then
+        return path
+    end
+
     title = string.Replace( title, "_", " " )
-    --end
 
     return title
 end
@@ -331,7 +333,7 @@ function GWave.OpenRadioMenu( radio, queue )
     currentAudio:SetPos( controlPanelX + controlPanelW * 1.1, controlPanelY )
 
     function currentAudio:Paint( w, h )
-        local txt = radio:GetURL() and "Currently Playing: " .. getTitle( radio:GetURL() ) or "Nothing is playing..."
+        local txt = radio:GetURL() ~= nil and "Currently Playing: " .. getTitle( radio:GetURL() ) or "Nothing is playing..."
         surface.SetFont( "GWaveFont" )
         local textWidth, textHeight = surface.GetTextSize( txt )
         self:SetY( ( controlPanelY + dframe:GetTall() ) * 0.5 - textHeight * 0.5 )

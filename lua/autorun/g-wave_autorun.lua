@@ -14,6 +14,31 @@ GWAVE.OPCODES = {
 
 GWAVE.OPCODECOUNT = math.ceil( math.log( table.Count( GWAVE.OPCODES ) + 1, 2 ) )
 
+--- Default whitelist
+if not CFCHTTP then
+    GWAVE.Whitelist = {
+        -- Discord
+        "discordapp.com",
+        "discordapp.net",
+        
+        -- Github
+        "github.com",
+        "githubusercontent.com",
+
+        -- Dropbox
+        "dropbox.com",
+        "dropboxusercontent.com",
+
+        -- Google Drive
+        "docs.google.com",
+        "drive.google.com",
+        ".googleusercontent.com",
+
+        -- Other
+        "tts.cyzon.us",
+    }
+end
+
 local developerCVar = GetConVar( "developer" )
 
 function GWAVE.Print( ... )

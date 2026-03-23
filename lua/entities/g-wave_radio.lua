@@ -199,6 +199,16 @@ if SERVER then
 
         return ent
     end
+
+    local function checkWhitelist( url )
+        if not GWAVE.Whitelist then return true end
+        for _, domain in ipairs( GWAVE.Whitelist ) do
+            if string.find( url, domain, 1, true ) then
+                return true
+            end
+        end
+        return false
+    end
     
     net.Receive( "gwave_operation", function( _, ply )
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
@@ -209,7 +219,14 @@ if SERVER then
         if opcode == GWAVE.OPCODES.OPEN then
             radio:OpenRadioMenu( ply )
         elseif opcode == GWAVE.OPCODES.ADD then
-            radio:AddToQueue( net.ReadString(), net.ReadFloat() )
+            local url, duration = net.ReadString(), net.ReadFloat()
+            if not url or url == "" then return end
+            if not checkWhitelist( url ) then
+                GWAVE.Print( "Blocked URL: " .. url )
+                return
+            end
+
+            radio:AddToQueue( url, duration )
             if #radio:GetQueue() == 1 and not radio:GetPlaying() then
                 radio:PlayFirstSong()
             end
