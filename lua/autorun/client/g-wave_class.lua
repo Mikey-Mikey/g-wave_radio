@@ -331,7 +331,7 @@ function GWave.OpenRadioMenu( radio, queue )
     currentAudio:SetPos( controlPanelX + controlPanelW * 1.1, controlPanelY )
 
     function currentAudio:Paint( w, h )
-        local txt = radio._current and "Currently Playing: " .. getTitle( radio._current ) or "Nothing is playing..."
+        local txt = radio:GetURL() and "Currently Playing: " .. getTitle( radio:GetURL() ) or "Nothing is playing..."
         surface.SetFont( "GWaveFont" )
         local textWidth, textHeight = surface.GetTextSize( txt )
         self:SetY( ( controlPanelY + dframe:GetTall() ) * 0.5 - textHeight * 0.5 )
