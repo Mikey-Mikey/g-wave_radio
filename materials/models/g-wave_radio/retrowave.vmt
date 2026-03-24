@@ -1,0 +1,5 @@
+"VertexLitGeneric"
+{
+	"$basetexture" "models/g-wave_radio/retrowave"
+	"$selfillum" "1"
+}
