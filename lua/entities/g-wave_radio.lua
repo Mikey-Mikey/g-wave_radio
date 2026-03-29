@@ -3,9 +3,9 @@ AddCSLuaFile()
 ENT.Type = "anim"
 ENT.Base = "base_anim"
 
-ENT.PrintName = "#g-wave_radio"
+ENT.PrintName = "G-Wave Radio"
 ENT.Author = "Mikey"
-ENT.Category = "#g-wave_radio"
+ENT.Category = "G-Wave Radio"
 
 ENT.Spawnable = true
 
