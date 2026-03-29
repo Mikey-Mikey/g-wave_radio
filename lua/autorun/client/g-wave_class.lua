@@ -31,12 +31,15 @@ local params = [[
 $smooth 1
 $mips 1
 ]]
+local btnSnd
+local errSnd
+if IsValid( game.GetWorld() ) then
+    btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
+    btnSnd:SetSoundLevel( 0 )
 
-local btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
-btnSnd:SetSoundLevel( 0 )
-
-local errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
-errSnd:SetSoundLevel( 0 )
+    errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
+    errSnd:SetSoundLevel( 0 )
+end
 
 hook.Add( "InitPostEntity", "InitClient", function()
     btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
