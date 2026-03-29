@@ -33,7 +33,7 @@ $mips 1
 ]]
 local btnSnd
 local errSnd
-if IsValid( game.GetWorld() ) then
+if game.GetWorld() and IsValid( LocalPlayer() ) then
     btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
     btnSnd:SetSoundLevel( 0 )
 
@@ -84,8 +84,11 @@ function GWave.OpenRadioMenu( radio, queue )
     -- ── Outer DFrame (invisible chrome, used for dragging) ──
     -- Per wiki: DFrame is the standard popup container.
     -- https://wiki.facepunch.com/gmod/DFrame
-    local W = math.Clamp( scrW * 0.55, 580, 920 )
-    local H = math.Clamp( scrH * 0.62, 480, 760 )
+    local appW = math.Clamp( scrW * 0.55, 580, 920 )
+    local appH = math.Clamp( scrH * 0.62, 480, 760 )
+    local pad = 24 -- CSS body padding so shadow renders safely inside frame
+    local W = appW + (pad * 2)
+    local H = appH + (pad * 2)
 
     local dframe = vgui.Create( "DFrame" )
     dframe:SetSize( W, H )
@@ -95,16 +98,29 @@ function GWave.OpenRadioMenu( radio, queue )
     dframe:ShowCloseButton( false )
     dframe:SetDraggable( true )
     dframe:InvalidateParent( true )
+    dframe:SetScreenLock( true )
     radioMenu = dframe
 
     -- Transparent frame background — DHTML fills the whole area
     function dframe:Paint( w, h ) end
 
     -- ── DHTML panel (wiki.facepunch.com/gmod/DHTML) ─────────
-    -- Docked FILL so it covers the entire DFrame client area.
+    -- Set to full size rather than docking to avoid DFrame's invisible title gap
     local dhtml = vgui.Create( "DHTML", dframe )
-    dhtml:Dock( FILL )
-    dhtml:SetScrollbars( false )   -- wiki.facepunch.com/gmod/DHTML:SetScrollbars
+    dhtml:SetPos( 0, 0 )
+    dhtml:SetSize( W, H )
+    dhtml:SetScrollbars( false )
+
+    -- DHTML triggers native dragging perfectly pixel-accurate to CEF scaling
+    dhtml:AddFunction( "gwave", "startDrag", function()
+        dframe.Dragging = { gui.MouseX() - dframe.x, gui.MouseY() - dframe.y }
+        dframe:MouseCapture( true )
+    end )
+    
+    dframe.OnMouseReleased = function( self, code )
+        self.Dragging = nil
+        self:MouseCapture( false )
+    end
 
     -- ── Helper: escape a string for safe JS single-quote literal ──
     local function jsStr( s )
@@ -393,8 +409,13 @@ function GWave.OpenRadioMenu( radio, queue )
 * {
   user-select:none;
 }
+*:focus {
+  outline:none;
+}
 html,body{
   width:100%;height:100%;
+  padding:24px;
+  box-sizing:border-box;
   background:transparent;
   color:var(--foreground);
   font-family:'Inter',sans-serif;
@@ -404,12 +425,12 @@ html,body{
 #app{
   display:flex;
   flex-direction:column;
-  height:100vh;
+  height:100%;
   background:var(--background);
   border:1px solid var(--border);
   border-radius:var(--radius);
   overflow:hidden;
-  box-shadow:0 10px 15px -3px rgba(0,0,0,0.5),0 4px 6px -4px rgba(0,0,0,0.5);
+  box-shadow:0 12px 12px rgba(0,0,0,0.85);
 }
 /* ── Header ── */
 #header{
@@ -421,7 +442,9 @@ html,body{
   flex-shrink:0;
   border-bottom:1px solid var(--border);
   background:var(--background);
+  cursor:move;
 }
+#header-text { pointer-events:none; }
 #header-icon{
   display:flex;align-items:center;justify-content:center;
   width:24px;height:24px;
@@ -663,11 +686,22 @@ html,body{
   background:transparent;
   cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  color:var(--muted-foreground);
-  transition:color 0.2s;
-  font-size:16px;
+  transition:transform 0.1s,background-color 0.2s,color 0.2s;
 }
-.t-btn:hover{color:var(--foreground);}
+.t-btn.sm{
+  width:36px;height:36px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.08);
+  color:var(--foreground);
+  font-size:14px;
+}
+.t-btn.sm:hover{
+  background:rgba(255,255,255,0.15);
+  transform:scale(1.05);
+}
+.t-btn.sm:active{
+  transform:scale(0.95);
+}
 #play-btn{
   width:40px;height:40px;
   border-radius:50%;
@@ -729,13 +763,13 @@ input[type=range]:disabled::-webkit-slider-thumb {
 <div id="app">
 
   <!-- Header -->
-  <div id="header">
+  <div id="header" onmousedown="if(event.button===0){gwave.startDrag();}">
     <div id="header-icon"><i class="fa-solid fa-radio"></i></div>
     <div id="header-text">
       <span id="header-title">]] .. initOwner .. [[</span>
       <span id="header-super">Radio Station</span>
     </div>
-    <button id="close-btn" onclick="gwave.close()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+    <button id="close-btn" onmousedown="event.stopPropagation();" onclick="gwave.close()" title="Close"><i class="fa-solid fa-xmark"></i></button>
   </div>
 
   <!-- URL row -->
