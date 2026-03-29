@@ -32,16 +32,19 @@ $smooth 1
 $mips 1
 ]]
 
-local addMat = Material( "vgui/Add.png", params )
-local playMat = Material( "vgui/Play.png", params )
-local pauseMat = Material( "vgui/Pause.png", params )
-local skipMat = Material( "vgui/Skip.png", params )
-local rewindMat = Material( "vgui/Rewind.png", params )
 local btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
 btnSnd:SetSoundLevel( 0 )
 
 local errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
 errSnd:SetSoundLevel( 0 )
+
+hook.Add( "InitPostEntity", "InitClient", function()
+    btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
+    btnSnd:SetSoundLevel( 0 )
+    
+    errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
+    errSnd:SetSoundLevel( 0 )
+end )
 
 local function playButtonSound()
     btnSnd:Stop()
@@ -150,6 +153,19 @@ function GWave.OpenRadioMenu( radio, queue )
         end )
     end )
 
+    -- Seek
+    dhtml:AddFunction( "gwave", "seek", function( progress )
+        local dur = radio:GetDuration()
+        if not dur or dur <= 0 then return end
+        
+        local time = dur * math.Clamp( tonumber( progress ) or 0, 0, 1 )
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.TIME, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.WriteFloat( time )
+        net.SendToServer()
+    end )
+
     -- Rewind to 0
     dhtml:AddFunction( "gwave", "rewind", function()
         net.Start( "gwave_operation" )
@@ -181,6 +197,16 @@ function GWave.OpenRadioMenu( radio, queue )
         net.WriteEntity( radio )
         net.SendToServer()
         playButtonSound()
+    end )
+
+    -- Change Volume
+    dhtml:AddFunction( "gwave", "volume", function( vol )
+        if not isOwner then return end
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.VOLUME, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.WriteFloat( tonumber( vol ) or 1 )
+        net.SendToServer()
     end )
 
     -- Remove queue item by 1-based index
@@ -242,6 +268,12 @@ function GWave.OpenRadioMenu( radio, queue )
         dhtml:Call( string.format( "window.gwaveUI.setProgress(%f)", prog ) )
     end
 
+    -- Push volume 0–1
+    local function pushVolume( vol )
+        if not IsValid( dhtml ) then return end
+        dhtml:Call( string.format( "window.gwaveUI.setVolume(%f)", vol ) )
+    end
+
     -- ════════════════════════════════════════════════════════
     --  Think hook — ticks state/progress into HTML each frame
     -- ════════════════════════════════════════════════════════
@@ -286,6 +318,13 @@ function GWave.OpenRadioMenu( radio, queue )
             end
         end
         pushProgress( prog )
+
+        -- Volume sync
+        local vol = radio:GetRadioVolume() or 1
+        if vol ~= radio._lastPushedVol then
+            pushVolume( vol )
+            radio._lastPushedVol = vol
+        end
     end )
 
     -- Clean up Think hook when frame is closed
@@ -315,6 +354,7 @@ function GWave.OpenRadioMenu( radio, queue )
     local initSubtitle = ( initURL ~= "" ) and "Now Streaming" or "Queue is empty"
     local initState    = jsStr( radio:GetState() or "stopped" )
     local initOwner    = jsStr( frameTitle )
+    local initVolume   = radio:GetRadioVolume() or 1
 
     dhtml:SetHTML( [[<!DOCTYPE html>
 <html>
@@ -549,15 +589,39 @@ html,body{
 }
 /* progress bar */
 #progress{
-  height:4px;
+  position:relative;
+  height:6px;
   background:var(--muted);
   width:100%;
+  cursor:pointer;
+  transition:height 0.1s;
+}
+#progress:hover{
+  height:10px;
 }
 #progress-fill{
+  position:relative;
   height:100%;
   width:0%;
   background:var(--primary);
   transition:width 0.2s linear;
+  pointer-events:none;
+}
+#progress-fill::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  right:0;
+  width:16px;
+  height:16px;
+  background:var(--primary);
+  border-radius:50%;
+  transform:translate(50%, -50%) scale(0);
+  transition:transform 0.1s ease;
+  box-shadow: 0 0 4px rgba(0,0,0,0.5);
+}
+#progress:hover #progress-fill::after{
+  transform:translate(50%, -50%) scale(1);
 }
 #player-inner{
   flex:1;
@@ -616,6 +680,46 @@ html,body{
   transform:scale(1.05);
 }
 #play-btn:active{transform:scale(0.95);}
+
+/* Volume Slider */
+#vol-container {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+input[type=range] {
+  -webkit-appearance: none;
+  width: 80px;
+  background: var(--muted);
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  height: 12px;
+  width: 12px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  margin-top: -4px;
+}
+input[type=range]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  cursor: pointer;
+  background: transparent;
+  border-radius: 2px;
+}
+input[type=range]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+input[type=range]:disabled::-webkit-slider-thumb {
+  background: var(--muted-foreground);
+  cursor: not-allowed;
+}
 </style>
 </head>
 <body>
@@ -651,7 +755,7 @@ html,body{
 
   <!-- Player bar -->
   <div id="player">
-    <div id="progress"><div id="progress-fill"></div></div>
+    <div id="progress" onclick="if(window.gwave && gwave.seek){ gwave.seek((event.clientX - this.getBoundingClientRect().left) / this.getBoundingClientRect().width); }"><div id="progress-fill"></div></div>
     <div id="player-inner">
       <div id="now-playing">
         <div id="np-sub">]] .. initSubtitle .. [[</div>
@@ -662,7 +766,10 @@ html,body{
         <button id="play-btn" class="t-btn lg" onclick="gwave.playPause()" title="Play / Pause"><i class="fa-solid fa-play"></i></button>
         <button class="t-btn sm" onclick="gwave.skip()" title="Skip"><i class="fa-solid fa-forward-step"></i></button>
       </div>
-      <div style="flex:0 0 36%;"></div>
+      <div style="flex:0 0 36%; padding-right:16px;" id="vol-container">
+        <i class="fa-solid fa-volume-high" style="color:var(--muted-foreground); font-size:12px;"></i>
+        <input type="range" id="vol-slider" min="0" max="1" step="0.01" oninput="if(IS_OWNER && window.gwave && gwave.volume){gwave.volume(this.value);} window.gwaveUI.updateVolSliderBg(this);">
+      </div>
     </div>
   </div>
 
@@ -747,6 +854,19 @@ window.gwaveUI = {
     document.getElementById('progress-fill').style.width = (frac * 100) + '%';
   },
 
+  setVolume: function(vol) {
+    var s = document.getElementById('vol-slider');
+    if (document.activeElement !== s) {
+      s.value = vol;
+      this.updateVolSliderBg(s);
+    }
+  },
+
+  updateVolSliderBg: function(el) {
+    var val = parseFloat(el.value || 0) * 100;
+    el.style.background = 'linear-gradient(to right, var(--primary) ' + val + '%, var(--muted) ' + val + '%)';
+  },
+
   showNotice: function(msg, type) {
     var el = document.getElementById('notice');
     el.textContent = msg;
@@ -766,6 +886,9 @@ window.gwaveUI = {
 // ── Bootstrap initial state ────────────────────────────────
 window.gwaveUI.updateQueue(]] .. initQueueJS .. [[);
 window.gwaveUI.setState(']] .. initState .. [[');
+document.getElementById('vol-slider').value = ]] .. initVolume .. [[;
+window.gwaveUI.updateVolSliderBg(document.getElementById('vol-slider'));
+if (!IS_OWNER) document.getElementById('vol-slider').disabled = true;
 </script>
 </body>
 </html>]] )

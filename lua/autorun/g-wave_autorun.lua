@@ -10,6 +10,7 @@ GWAVE.OPCODES = {
     PAUSE = 6,
     SKIP = 7,
     TIME = 8,
+    VOLUME = 9,
 }
 
 GWAVE.OPCODECOUNT = math.ceil( math.log( table.Count( GWAVE.OPCODES ) + 1, 2 ) )
@@ -48,6 +49,9 @@ function GWAVE.Print( ... )
 end
 
 if SERVER then
+    --resource.AddFile( "models/g-wave_radio/radio.mdl" )
+    resource.AddWorkshop( "3690398910" )
+
     GWAVE.Convars.RadioLimit = CreateConVar( "sbox_maxg-wave_radios", 2, { FCVAR_REPLICATED, FCVAR_ARCHIVE } )
     util.AddNetworkString( "gwave_operation" )
     util.AddNetworkString( "gwave_openmenu" )
