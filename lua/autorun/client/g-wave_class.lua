@@ -393,6 +393,7 @@ function GWave.OpenRadioMenu( radio, queue )
   --card-foreground: #ffffff;
   --primary: #9D50BB;
   --primary-foreground: #ffffff;
+  --primary-hover: #c87ce6;
   --secondary: #131313;
   --secondary-foreground: #ffffff;
   --muted: #131313;
@@ -622,15 +623,12 @@ html,body{
   cursor:pointer;
   transition:height 0.1s;
 }
-#progress:hover{
-  height:10px;
-}
 #progress-fill{
   position:relative;
   height:100%;
   width:0%;
   background:var(--primary);
-  transition:width 0.2s linear;
+  /*transition:width 0.2s linear;*/
   pointer-events:none;
 }
 #progress-fill::after{
@@ -646,9 +644,16 @@ html,body{
   transition:transform 0.1s ease;
   box-shadow: 0 0 4px rgba(0,0,0,0.5);
 }
+
 #progress:hover #progress-fill::after{
   transform:translate(50%, -50%) scale(1);
+  background: var(--primary-hover);
 }
+
+#progress:hover #progress-fill{
+  background: var(--primary-hover);
+}
+
 #player-inner{
   flex:1;
   display:flex;
