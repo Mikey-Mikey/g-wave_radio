@@ -97,4 +97,6 @@ if CLIENT then
         EyePos()
         EyeAngles()
     end )
+
+    list.Set( "ContentCategoryIcons", "G-Wave Radio", "materials/icon16/sound.png" )
 end

@@ -772,7 +772,6 @@ input[type=range]:disabled::-webkit-slider-thumb {
     <div id="header-icon"><i class="fa-solid fa-radio"></i></div>
     <div id="header-text">
       <span id="header-title">]] .. initOwner .. [[</span>
-      <span id="header-super">Radio Station</span>
     </div>
     <button id="close-btn" onmousedown="event.stopPropagation();" onclick="gwave.close()" title="Close"><i class="fa-solid fa-xmark"></i></button>
   </div>
@@ -943,7 +942,11 @@ net.Receive( "gwave_openmenu", function()
     local radio = net.ReadEntity()
     if not IsValid( radio ) then return end
 
-    local queue = net.ReadTable()
+    local count = net.ReadUInt( 16 )
+    local queue = {}
+    for i = 1, count do
+        table.insert( queue, { url = net.ReadString(), duration = net.ReadFloat() } )
+    end
     GWave.OpenRadioMenu( radio, queue )
 end )
 
@@ -951,7 +954,11 @@ net.Receive( "gwave_syncqueue", function()
     local radio = net.ReadEntity()
     if not IsValid( radio ) then return end
 
-    local queue = net.ReadTable()
+    local count = net.ReadUInt( 16 )
+    local queue = {}
+    for i = 1, count do
+        table.insert( queue, { url = net.ReadString(), duration = net.ReadFloat() } )
+    end
     radio._queue = queue
     radio._queueChanged = true
 end )

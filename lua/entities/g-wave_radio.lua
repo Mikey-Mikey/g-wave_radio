@@ -10,12 +10,16 @@ ENT.Category = "G-Wave Radio"
 ENT.Spawnable = true
 
 ENT.Queue = {}
+ENT.QueueCooldown = 0.1
 ENT._AudioChannel = nil
 ENT.Radius = 1000
 ENT.PlaybackRate = 1
 ENT._CurrentBassVolume = 0
 ENT.Time = 0
 ENT.ChangingSong = false
+ENT.BarHeights = {}
+ENT.AverageVol = 0
+ENT.MaxQueueSize = 32
 
 if CLIENT then
     language.Add( "g-wave_radio", "G-Wave Radio" )
@@ -30,6 +34,77 @@ function ENT:Initialize()
         self:SetSkin( math.random( 0, self:SkinCount() - 1 ) )
         self:SetState( "stopped" )
         self:SetRadioVolume( 1 )
+        if WireLib then
+            local inputs = {}
+
+            local outputs = {}
+            self:SetupWiremodPorts( inputs, outputs )
+
+            local inNames, inTypes, inDescr = {}, {}, {}
+
+            for i, v in ipairs( inputs ) do
+                inNames[i] = v[1]
+                inTypes[i] = v[2]
+                inDescr[i] = v[3]
+            end
+
+            WireLib.CreateSpecialInputs(
+                self,
+                inNames,
+                inTypes,
+                inDescr
+            )
+
+            local outNames, outTypes, outDescr = {}, {}, {}
+
+            for i, v in ipairs( outputs ) do
+                outNames[i] = v[1]
+                outTypes[i] = v[2]
+                outDescr[i] = v[3]
+            end
+
+            WireLib.CreateSpecialOutputs(
+                self,
+                outNames,
+                outTypes,
+                outDescr
+            )
+        end
+    end
+end
+
+function ENT:SetupWiremodPorts( inputs, outputs )
+    table.insert( inputs, { "Playing", "NORMAL", "Play/Pause the radio" } )
+    table.insert( inputs, { "Volume", "NORMAL", "Set the volume of the radio" } )
+    table.insert( inputs, { "URL", "STRING", "Set the URL of the radio" } )
+    table.insert( inputs, { "Queue", "ARRAY", "Set the queue of the radio" } )
+
+    table.insert( outputs, { "Playing", "NORMAL", "Is the radio playing?" } )
+    table.insert( outputs, { "Volume", "NORMAL", "The volume of the radio" } )
+    table.insert( outputs, { "URL", "STRING", "The URL of the radio" } )
+    table.insert( outputs, { "Queue", "ARRAY", "The queue of the radio" } )
+end
+
+function ENT:TriggerInput( inputName, value )
+    if inputName == "Playing" then
+        self:SetPlaying( value ~= 0 )
+    elseif inputName == "Volume" then
+        self:SetRadioVolume( value )
+    elseif inputName == "URL" then
+        if self.QueueCooldown > 0 then return end
+        self.QueueCooldown = 0.1
+        self:SetURL( value )
+    elseif inputName == "Queue" then
+        if self.QueueCooldown > 0 then return end
+        self.QueueCooldown = 0.1
+        self.Queue = {}
+        for i = 1, math.min( #value, self.MaxQueueSize ) do
+            self.Queue[i] = value[i]
+        end
+        net.Start( "gwave_syncqueue" )
+        net.WriteEntity( self )
+        self:WriteQueue()
+        net.Broadcast()
     end
 end
 
@@ -79,7 +154,6 @@ function ENT:SetupDataTables()
                     -- trim delimiter
                     local delimiter = "%[|%]"
                     url = string.gsub( url, "%|.*$", "" )
-                    print( url )
                     sound.PlayURL( url, "noplay 3d noblock", function( station )
                         if not IsValid( station ) then return end
                         self._AudioChannel = station
@@ -120,6 +194,35 @@ function ENT:SetupDataTables()
 end
 
 if SERVER then
+    function ENT:Think()
+        self.QueueCooldown = self.QueueCooldown - engine.TickInterval()
+    end
+
+    function ENT:OnDuplicated( tbl )
+        --self.Queue = tbl.Queue
+
+        self:SetState( "stopped" )
+        self:SetPlaying( false )
+
+        self:SetDataCreator( tbl.Player )
+        --self:SetRadioVolume( tbl.DT.RadioVolume )
+        --self:SetStartTime( tbl.DT.StartTime )
+        --self:SetURL( tbl.DT.URL .. "|" .. os.time() )
+        --self:SetDuration( tbl.DT.Duration )
+
+        timer.Simple( 0, function()
+            self:SetState( tbl.DT.State )
+            self:SetPlaying( tbl.DT.Playing )
+        end )
+
+        self:SetSkin( tbl.Skin )
+
+        net.Start( "gwave_syncqueue" )
+        net.WriteEntity( self )
+        self:WriteQueue()
+        net.Broadcast()
+    end
+
     function ENT:Use( activator )
         if not IsValid( activator ) or not activator:IsPlayer() then return end
         self:OpenRadioMenu( activator )
@@ -128,7 +231,7 @@ if SERVER then
     function ENT:OpenRadioMenu( ply )
         net.Start( "gwave_openmenu" )
         net.WriteEntity( self )
-        net.WriteTable( self:GetQueue() )
+        self:WriteQueue()
         net.Send( ply )
     end
 
@@ -136,7 +239,7 @@ if SERVER then
         table.insert( self.Queue, { url = url, duration = duration } )
         net.Start( "gwave_syncqueue" )
         net.WriteEntity( self )
-        net.WriteTable( self:GetQueue() )
+        self:WriteQueue()
         net.Broadcast()
     end
 
@@ -144,13 +247,22 @@ if SERVER then
         local element = table.remove( self.Queue, id )
         net.Start( "gwave_syncqueue" )
         net.WriteEntity( self )
-        net.WriteTable( self:GetQueue() )
+        self:WriteQueue()
         net.Broadcast()
         return element
     end
 
     function ENT:GetQueue()
         return self.Queue
+    end
+
+    function ENT:WriteQueue()
+        local q = self:GetQueue()
+        net.WriteUInt( #q, 16 )
+        for i = 1, #q do
+            net.WriteString( q[i].url or "" )
+            net.WriteFloat( q[i].duration or 0 )
+        end
     end
 
     function ENT:PlayFirstSong()
@@ -224,6 +336,10 @@ if SERVER then
         local radio = net.ReadEntity()
         if not IsValid( radio ) then return end
         if radio:GetDataCreator() ~= ply then return end
+
+        radio._lastOpTime = radio._lastOpTime or 0
+        if CurTime() - radio._lastOpTime < 0.1 then return end
+        radio._lastOpTime = CurTime()
 
         if opcode == GWAVE.OPCODES.OPEN then
             radio:OpenRadioMenu( ply )
@@ -393,8 +509,145 @@ if CLIENT then
     end
 
     function ENT:Draw()
-        self:MarkShadowAsDirty() -- Makes the shadow scale with the model
+        self:MarkShadowAsDirty()
         self:DrawModel()
     end
+
+    local function drawRadioOverlay( radio )
+        local ply = LocalPlayer()
+        if not IsValid( ply ) then return end
+
+        local pos = radio:GetPos()
+
+        local url = radio:GetURL() or ""
+        url = string.gsub( url, "%|.*$", "" )
+
+        local text = url
+        if text ~= "" then
+            local pathExt = string.match( text, "([^/]+)$" )
+            if pathExt then
+                local name = string.match( pathExt, "^(.+)%.[^.]+$" )
+                text = name or pathExt
+            end
+            text = string.Replace( text, "_", " " )
+            text = string.Trim( text )
+            text = string.gsub( text, "%%20", " " )
+        end
+
+        local state = radio:GetState() or "stopped"
+        local playing = radio:GetPlaying()
+
+        if state == "stopped" or text == "" then
+            text = "G-Wave Radio"
+        elseif not playing then
+            text = "[Paused] " .. text
+        end
+
+        local ch = radio._AudioChannel
+        local prog = 0
+        local dur = radio:GetDuration()
+        if IsValid( ch ) then
+            if dur and dur > 0 then
+                prog = math.Clamp( ch:GetTime() / dur, 0, 1 )
+            end
+        end
+
+        local zOffset = radio:OBBMaxs().z + 12
+        local drawPos = pos + Vector( 0, 0, zOffset )
+
+        local ang = ( ply:EyePos() - drawPos ):Angle()
+        ang.p = 0
+        ang.r = 0
+        ang:RotateAroundAxis( ang:Up(), 90 )
+        ang:RotateAroundAxis( ang:Forward(), 90 )
+
+        cam.Start3D2D( drawPos, ang, 0.1 )
+            surface.SetFont( "Trebuchet24" )
+            local tw, th = surface.GetTextSize( text )
+
+            local paddingX = 48
+            local paddingY = 24
+            local barH = 6
+            local barGap = 12
+
+            local w = math.max( tw, 250 ) + paddingX
+            local h = th + barGap + barH + paddingY
+
+            local x = -w / 2
+            local y = -h / 2
+
+            draw.RoundedBox( 12, x, y, w, h, Color( 14, 14, 14, 240 ) )
+
+            if ch and playing then
+                -- rectangle visualizer
+                local fft = {}
+                ch:FFT( fft, FFT_256)
+                local barWidth = math.floor( w / #fft / 2 )
+
+                --local highestDb = math.max( 0, 20 * math.log10( fft[highestIndex] ) + 12 ) / 16
+                --print( highestDb )
+                --self.BarHeights[1] = self.BarHeights[1] or 0
+                --self.BarHeights[1] = self.BarHeights[1] + ( highestDb * 5 - self.BarHeights[1] ) * 0.1
+                --self.BarHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
+                for i = 1, #fft do
+                    radio.BarHeights[i] = radio.BarHeights[i] or 0
+                end
+                for iter = 1, 2 do
+                    local unRippledHeights = table.Copy( radio.BarHeights )
+                    for i = 1, #fft do
+                        local db = fft[i]^2 * 10--math.max( 0, 20 * math.log10( fft[i] ) + 16 ) / 4
+                        db = db ^ 0.5
+                        radio.BarHeights[i] = radio.BarHeights[i] * 0.99
+                        radio.BarHeights[i] = math.max( radio.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
+
+                        if i > 1 then
+                            -- ripple
+                            radio.BarHeights[i] = Lerp( 0.5, radio.BarHeights[i], unRippledHeights[i - 1] )
+                        end
+
+                        if i < #fft then
+                            -- ripple
+                            radio.BarHeights[i + 1] = Lerp( 0.5, radio.BarHeights[i + 1], unRippledHeights[i] )
+                        end
+                    end
+                end
+
+                for i = 1, #fft do
+                    local nx = ( i - 1 + 0.5 ) * barWidth
+                    surface.SetDrawColor( 157, 80, 187, 100 + radio.BarHeights[i] * 155 )
+                    surface.DrawRect( nx, y * 3 + h - math.floor( radio.BarHeights[i] * h ), barWidth, math.floor( radio.BarHeights[i] * h ) )
+                    surface.DrawRect( -nx, y * 3 + h - math.floor( radio.BarHeights[i] * h ), barWidth, math.floor( radio.BarHeights[i] * h ) )
+                end
+            end
+
+            surface.SetTextColor( 255, 255, 255, 255 )
+            surface.SetTextPos( x + (w - tw) / 2, y + paddingY / 2 )
+            surface.DrawText( text )
+
+            local barX = x + paddingX / 2
+            local barY = y + paddingY / 2 + th + barGap
+            local barW = w - paddingX
+            surface.SetDrawColor( 79, 26, 104)
+            surface.DrawRect( barX - 1, barY - 1, barW + 2, barH + 2 )
+
+            surface.SetDrawColor( 43, 4, 48)
+            surface.DrawRect( barX, barY, barW, barH )
+
+            if prog > 0 then
+                surface.SetDrawColor( 157, 80, 187, 255 )
+                surface.DrawRect( barX, barY, barW * prog, barH )
+            end
+        cam.End3D2D()
+    end
+    --hook.Remove( "PostDrawOpaqueRenderables", "G-Wave_DrawRadioOverlays" )
+    hook.Add( "PostDrawTranslucentRenderables", "G-Wave_DrawRadioOverlays", function( depth, sky, sky3d )
+        if depth or sky or sky3d then return end
+        local radios = ents.FindInBox( LocalPlayer():EyePos() - Vector( 500, 500, 500 ), LocalPlayer():EyePos() + Vector( 500, 500, 500 ) )
+        for _, ent in ipairs( radios ) do
+            if ent:GetClass() == "g-wave_radio" then
+                drawRadioOverlay( ent )
+            end
+        end
+    end )
 end
 
