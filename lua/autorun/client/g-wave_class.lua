@@ -218,6 +218,16 @@ function GWave.OpenRadioMenu( radio, queue )
         playButtonSound()
     end )
 
+    -- Toggle loop
+    dhtml:AddFunction( "gwave", "toggleLoop", function()
+        if not isOwner then return end
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.LOOP, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.SendToServer()
+        playButtonSound()
+    end )
+
     -- Change Volume
     dhtml:AddFunction( "gwave", "volume", function( vol )
         if not isOwner then return end
@@ -293,6 +303,12 @@ function GWave.OpenRadioMenu( radio, queue )
         dhtml:Call( string.format( "window.gwaveUI.setVolume(%f)", vol ) )
     end
 
+    -- Push looping
+    local function pushLooping( isLooping )
+        if not IsValid( dhtml ) then return end
+        dhtml:Call( string.format( "window.gwaveUI.setLooping(%s)", isLooping and "true" or "false" ) )
+    end
+
     -- ════════════════════════════════════════════════════════
     --  Think hook — ticks state/progress into HTML each frame
     -- ════════════════════════════════════════════════════════
@@ -344,6 +360,13 @@ function GWave.OpenRadioMenu( radio, queue )
             pushVolume( vol )
             radio._lastPushedVol = vol
         end
+
+        -- Looping sync
+        local isLooping = radio:GetLooping() or false
+        if isLooping ~= radio._lastPushedLooping then
+            pushLooping( isLooping )
+            radio._lastPushedLooping = isLooping
+        end
     end )
 
     -- Clean up Think hook when frame is closed
@@ -374,6 +397,7 @@ function GWave.OpenRadioMenu( radio, queue )
     local initState    = jsStr( radio:GetState() or "stopped" )
     local initOwner    = jsStr( frameTitle )
     local initVolume   = radio:GetRadioVolume() or 1
+    local initLooping  = radio:GetLooping() and "true" or "false"
 
     dhtml:SetHTML( [[<!DOCTYPE html>
 <html>
@@ -806,6 +830,7 @@ input[type=range]:disabled::-webkit-slider-thumb {
         <button class="t-btn sm" onclick="gwave.rewind()" title="Rewind"><i class="fa-solid fa-backward-step"></i></button>
         <button id="play-btn" class="t-btn lg" onclick="gwave.playPause()" title="Play / Pause"><i class="fa-solid fa-play"></i></button>
         <button class="t-btn sm" onclick="gwave.skip()" title="Skip"><i class="fa-solid fa-forward-step"></i></button>
+        <button id="loop-btn" class="t-btn sm" onclick="gwave.toggleLoop()" title="Loop Track"><i class="fa-solid fa-repeat"></i></button>
       </div>
       <div style="flex:0 0 36%; padding-right:16px;" id="vol-container">
         <i class="fa-solid fa-volume-high" style="color:var(--muted-foreground); font-size:12px;"></i>
@@ -921,12 +946,23 @@ window.gwaveUI = {
     }, 3000);
   },
 
+  setLooping: function(isLooping) {
+    var btn = document.getElementById('loop-btn');
+    if (!btn) return;
+    if (isLooping) {
+      btn.style.color = 'var(--primary)';
+    } else {
+      btn.style.color = 'var(--foreground)';
+    }
+  },
+
   _noop: function() {}
 };
 
 // ── Bootstrap initial state ────────────────────────────────
 window.gwaveUI.updateQueue(]] .. initQueueJS .. [[);
 window.gwaveUI.setState(']] .. initState .. [[');
+window.gwaveUI.setLooping(]] .. initLooping .. [[);
 document.getElementById('vol-slider').value = ]] .. initVolume .. [[;
 window.gwaveUI.updateVolSliderBg(document.getElementById('vol-slider'));
 if (!IS_OWNER) document.getElementById('vol-slider').disabled = true;

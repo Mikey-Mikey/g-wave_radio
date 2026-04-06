@@ -116,6 +116,7 @@ function ENT:SetupDataTables()
     self:NetworkVar( "Bool", "Playing" )
     self:NetworkVar( "String", "State" )
     self:NetworkVar( "Float", "RadioVolume" )
+    self:NetworkVar( "Bool", "Looping" )
 
     if CLIENT then
         self:NetworkVarNotify( "URL", function( _, _, old, new )
@@ -281,13 +282,24 @@ if SERVER then
     end
 
     function ENT:PlayNextSong()
+        if self:GetLooping() and self:GetURL() ~= "" then
+            local oldUrl = string.gsub( self:GetURL(), "%|.*$", "" )
+            table.insert( self.Queue, { url = oldUrl, duration = self:GetDuration() } )
+        end
+
         if #self.Queue == 0 then
             self:SetPlaying( false )
             self:SetState( "stopped" )
+            self:SetURL( "" )
             return
         end
 
-        local current = self:RemoveFromQueue( 1 )
+        local current = table.remove( self.Queue, 1 )
+        net.Start( "gwave_syncqueue" )
+        net.WriteEntity( self )
+        self:WriteQueue()
+        net.Broadcast()
+
         self:SetURL( current.url .. "|" .. os.time() )
         self:SetDuration( current.duration )
         self:SetPlaying( true )
@@ -376,7 +388,7 @@ if SERVER then
             radio:SetPlaying( false )
             radio:SetState( "paused" )
         elseif opcode == GWAVE.OPCODES.SKIP then
-            if #radio:GetQueue() > 0 then
+            if #radio:GetQueue() > 0 or radio:GetLooping() then
                 radio:PlayNextSong()
                 radio:SetPlaying( true )
                 radio:SetState( "playing" )
@@ -392,6 +404,8 @@ if SERVER then
         elseif opcode == GWAVE.OPCODES.VOLUME then
             local volume = net.ReadFloat()
             radio:SetRadioVolume( math.Clamp( volume, 0, 1 ) )
+        elseif opcode == GWAVE.OPCODES.LOOP then
+            radio:SetLooping( not radio:GetLooping() )
         end
     end )
 end
@@ -498,12 +512,16 @@ if CLIENT then
 
         -- Advance queue and update server queue
         if self:GetDataCreator() == LocalPlayer() and IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED then
-            if self._queue and #self._queue > 0 and not self.ChangingSong then
+            if not self.ChangingSong and self:GetURL() ~= "" then
                 self.ChangingSong = true
-                net.Start( "gwave_operation" )
-                net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
-                net.WriteEntity( self )
-                net.SendToServer()
+                if (self._queue and #self._queue > 0) or self:GetLooping() then
+                    net.Start( "gwave_operation" )
+                    net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
+                    net.WriteEntity( self )
+                    net.SendToServer()
+                else
+                    self.ChangingSong = false
+                end
             end
         end
     end
