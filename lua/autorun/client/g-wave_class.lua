@@ -407,8 +407,29 @@ function GWave.OpenRadioMenu( radio, queue )
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Inter:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <style>
+.icon {
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  vertical-align: -0.125em;
+}
+.icon-radio { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/radio.png'); }
+.icon-xmark { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/xmark.png'); }
+.icon-plus { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/plus.png'); }
+.icon-backward-step { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/backward-step.png'); }
+.icon-play { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/play.png'); }
+.icon-pause { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/pause.png'); }
+.icon-forward-step { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/forward-step.png'); }
+.icon-repeat { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/repeat.png'); }
+.icon-volume-high { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/volume-high.png'); }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
   --background: #0e0e0e;
@@ -474,10 +495,21 @@ html,body{
   display:flex;align-items:center;justify-content:center;
   width:24px;height:24px;
   border-radius:4px;
-  background:var(--primary);
+  background: transparent;
   color:var(--primary-foreground);
   font-size:12px;
 }
+
+.icon-radio {
+  width: 4em;
+  height: 4em;
+}
+
+.icon-volume-high {
+  width: 2em;
+  height: 2em;
+}
+
 #header-text{display:flex;flex-direction:column;flex:1;justify-content:center;}
 #header-title{font-size:14px;font-weight:600;color:var(--foreground);}
 #header-super{font-size:12px;color:var(--muted-foreground);}
@@ -793,18 +825,18 @@ input[type=range]:disabled::-webkit-slider-thumb {
 
   <!-- Header -->
   <div id="header" onmousedown="if(event.button===0){gwave.startDrag();}">
-    <div id="header-icon"><i class="fa-solid fa-radio"></i></div>
+    <div id="header-icon"><i class="icon icon-radio"></i></div>
     <div id="header-text">
       <span id="header-title">]] .. initOwner .. [[</span>
     </div>
-    <button id="close-btn" onmousedown="event.stopPropagation();" onclick="gwave.close()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+    <button id="close-btn" onmousedown="event.stopPropagation();" onclick="gwave.close()" title="Close"><i class="icon icon-xmark"></i></button>
   </div>
 
   <!-- URL row -->
   <div id="url-row">
     <input id="url-input" type="text" placeholder="Paste a stream URL..."
            onkeydown="if(event.key==='Enter'){gwave.add(this.value);this.value='';}">
-    <button id="add-btn" onclick="gwave.add(document.getElementById('url-input').value);document.getElementById('url-input').value='';" title="Add to queue"><i class="fa-solid fa-plus"></i></button>
+    <button id="add-btn" onclick="gwave.add(document.getElementById('url-input').value);document.getElementById('url-input').value='';" title="Add to queue"><i class="icon icon-plus"></i></button>
   </div>
 
   <!-- Notice bar -->
@@ -827,13 +859,13 @@ input[type=range]:disabled::-webkit-slider-thumb {
         <div id="np-title">]] .. initTitle .. [[</div>
       </div>
       <div id="transport">
-        <button class="t-btn sm" onclick="gwave.rewind()" title="Rewind"><i class="fa-solid fa-backward-step"></i></button>
-        <button id="play-btn" class="t-btn lg" onclick="gwave.playPause()" title="Play / Pause"><i class="fa-solid fa-play"></i></button>
-        <button class="t-btn sm" onclick="gwave.skip()" title="Skip"><i class="fa-solid fa-forward-step"></i></button>
-        <button id="loop-btn" class="t-btn sm" onclick="gwave.toggleLoop()" title="Loop Track"><i class="fa-solid fa-repeat"></i></button>
+        <button class="t-btn sm" onclick="gwave.rewind()" title="Rewind"><i class="icon icon-backward-step"></i></button>
+        <button id="play-btn" class="t-btn lg" onclick="gwave.playPause()" title="Play / Pause"><i class="icon icon-play"></i></button>
+        <button class="t-btn sm" onclick="gwave.skip()" title="Skip"><i class="icon icon-forward-step"></i></button>
+        <button id="loop-btn" class="t-btn sm" onclick="gwave.toggleLoop()" title="Loop Track"><i class="icon icon-repeat"></i></button>
       </div>
       <div style="flex:0 0 36%; padding-right:16px;" id="vol-container">
-        <i class="fa-solid fa-volume-high" style="color:var(--muted-foreground); font-size:12px;"></i>
+        <i class="icon icon-volume-high" style="color:var(--muted-foreground); font-size:12px; cursor:pointer;" onclick="if(IS_OWNER) window.gwaveUI.toggleMute();"></i>
         <input type="range" id="vol-slider" min="0" max="1" step="0.01" oninput="if(IS_OWNER && window.gwave && gwave.volume){gwave.volume(this.value);} window.gwaveUI.updateVolSliderBg(this);">
       </div>
     </div>
@@ -908,11 +940,11 @@ window.gwaveUI = {
     var icon = document.querySelector('#play-btn i');
     if (!icon) return;
     if (state === 'playing') {
-      icon.classList.remove('fa-play');
-      icon.classList.add('fa-pause');
+      icon.classList.remove('icon-play');
+      icon.classList.add('icon-pause');
     } else {
-      icon.classList.remove('fa-pause');
-      icon.classList.add('fa-play');
+      icon.classList.remove('icon-pause');
+      icon.classList.add('icon-play');
     }
   },
 
@@ -931,6 +963,22 @@ window.gwaveUI = {
   updateVolSliderBg: function(el) {
     var val = parseFloat(el.value || 0) * 100;
     el.style.background = 'linear-gradient(to right, var(--primary) ' + val + '%, var(--muted) ' + val + '%)';
+  },
+
+  toggleMute: function() {
+    if (!IS_OWNER || !window.gwave || !gwave.volume) return;
+    var s = document.getElementById('vol-slider');
+    var current = parseFloat(s.value);
+    if (current > 0) {
+      this._lastVol = current;
+      gwave.volume(0);
+      s.value = 0;
+    } else {
+      var restore = this._lastVol || 1;
+      gwave.volume(restore);
+      s.value = restore;
+    }
+    this.updateVolSliderBg(s);
   },
 
   showNotice: function(msg, type) {
