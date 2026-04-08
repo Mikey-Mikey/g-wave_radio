@@ -225,7 +225,7 @@ if SERVER then
     end
 
     function ENT:Use( activator )
-        if not IsValid( activator ) or not activator:IsPlayer() then return end
+        if not IsValid( activator ) or activator ~= self:GetDataCreator() then return end
         self:OpenRadioMenu( activator )
     end
 
