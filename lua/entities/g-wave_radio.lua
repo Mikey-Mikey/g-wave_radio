@@ -12,7 +12,7 @@ ENT.Spawnable = true
 ENT.Queue = {}
 ENT.QueueCooldown = 0.1
 ENT._AudioChannel = nil
-ENT.Radius = 1000
+ENT.Radius = 1500
 ENT.PlaybackRate = 1
 ENT._CurrentBassVolume = 0
 ENT.Time = 0
@@ -140,6 +140,10 @@ function ENT:SetupDataTables()
                     station:SetVolume( 1 )
                     if self:GetPlaying() then
                         station:Play()
+                        --timer.Simple( 0, function()
+                            --print( self._CurrentTime )
+                            station:SetTime( self._SavedTime or 0 )
+                        --end )
                     end
                     self.ChangingSong = false
                 end )
@@ -200,28 +204,26 @@ if SERVER then
     end
 
     function ENT:OnDuplicated( tbl )
-        --self.Queue = tbl.Queue
-
         self:SetState( "stopped" )
         self:SetPlaying( false )
-
-        self:SetDataCreator( tbl.Player )
-        --self:SetRadioVolume( tbl.DT.RadioVolume )
-        --self:SetStartTime( tbl.DT.StartTime )
-        --self:SetURL( tbl.DT.URL .. "|" .. os.time() )
-        --self:SetDuration( tbl.DT.Duration )
 
         timer.Simple( 0, function()
             self:SetState( tbl.DT.State )
             self:SetPlaying( tbl.DT.Playing )
         end )
 
-        self:SetSkin( tbl.Skin )
+        if tbl.Skin then
+            self:SetSkin( tbl.Skin )
+        end
 
         net.Start( "gwave_syncqueue" )
         net.WriteEntity( self )
         self:WriteQueue()
         net.Broadcast()
+    end
+
+    function ENT:PostEntityPaste( ply )
+        self:SetDataCreator( ply )
     end
 
     function ENT:Use( activator )
@@ -453,13 +455,24 @@ if CLIENT then
     function ENT:OnRemove( fullUpdate )
         --if not fullUpdate then return end
 
-        if self._AudioChannel then
-            self._AudioChannel:Stop()
-            self._AudioChannel = nil
+        if fullUpdate then
+            self._SavedTime = self._AudioChannel:GetTime()
+            self:SetPlaying( false )
+        else
+            if self._AudioChannel then
+                self._AudioChannel:Stop()
+                self._AudioChannel = nil
+            end
         end
+
+        
     end
 
     function ENT:Think()
+        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self:GetPlaying() then
+            self._AudioChannel:Play()
+        end
+
         if IsValid( self._AudioChannel ) and self:GetPlaying() then
             self._AudioChannel:SetPos( self:GetPos() )
             local eyeOffset = self:GetPos() - EyePos()
