@@ -458,10 +458,12 @@ if CLIENT then
         --if not fullUpdate then return end
 
         if fullUpdate then
-            self._SavedTime = self._AudioChannel:GetTime()
-            self:SetPlaying( false )
+            if IsValid( self._AudioChannel ) then
+                self._SavedTime = self._AudioChannel:GetTime()
+                self:SetPlaying( false )
+            end
         else
-            if self._AudioChannel then
+            if IsValid( self._AudioChannel ) then
                 self._AudioChannel:Stop()
                 self._AudioChannel = nil
             end
