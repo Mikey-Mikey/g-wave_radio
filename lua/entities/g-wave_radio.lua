@@ -168,6 +168,7 @@ function ENT:SetupDataTables()
                         station:SetVolume( 1 )
                         if new then
                             station:Play()
+                            self._TryingSaveFix = false
                         end
                     end )
                     return
@@ -189,6 +190,7 @@ function ENT:SetupDataTables()
                         station:Set3DFadeDistance( 1000, 1000 )
                         station:SetVolume( 1 )
                         station:Play()
+                        self._TryingSaveFix = false
                     end )
                     --self._AudioChannel:Stop()
                 end
@@ -473,8 +475,14 @@ if CLIENT then
     end
 
     function ENT:Think()
-        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self:GetPlaying() then
+        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() ~= GMOD_CHANNEL_PLAYING and self:GetPlaying() then
             self._AudioChannel:Play()
+        end
+
+        if not IsValid( self._AudioChannel ) and self:GetPlaying() and self:GetURL() ~= "" and not self._TryingSaveFix then
+            self._TryingSaveFix = true
+            self:SetPlaying( false )
+            self:SetPlaying( true )
         end
 
         if IsValid( self._AudioChannel ) and self:GetPlaying() then
@@ -494,7 +502,7 @@ if CLIENT then
                 realVolume = realVolume * math.max( 0.5, ( math.min( dot, 0 ) + 1 ) )
                 realVolume = realVolume * GWAVE.VolumeMultiplier:GetFloat()
 
-                self._AudioChannel:SetVolume( realVolume )
+                self._AudioChannel:SetVolume( realVolume * 2 )
             end
 
             self._AudioChannel:SetPlaybackRate( self.PlaybackRate )
@@ -511,8 +519,8 @@ if CLIENT then
                 maxVal = math.max( maxVal, fft[i] )
             end
 
-
-            self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * 0.1
+            local lerpFactor = 1 - math.pow( 1 - 0.1, FrameTime() * 66.666 )
+            self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * lerpFactor
 
             local squish = self._CurrentBassVolume * 0.5
 
@@ -627,22 +635,31 @@ if CLIENT then
                 for i = 1, #fft do
                     radio.BarHeights[i] = radio.BarHeights[i] or 0
                 end
-                for iter = 1, 2 do
+
+                local dt = FrameTime()
+                local iterCount = math.max( 1, math.Round( dt * 120 ) )
+                local stepTime = dt / iterCount
+                local relativeStep = stepTime * 120
+                
+                local decay = math.pow( 0.99, relativeStep )
+                local ripple = 1 - math.pow( 0.5, relativeStep )
+
+                for iter = 1, iterCount do
                     local unRippledHeights = table.Copy( radio.BarHeights )
                     for i = 1, #fft do
                         local db = fft[i]^2 * 10--math.max( 0, 20 * math.log10( fft[i] ) + 16 ) / 4
                         db = db ^ 0.5
-                        radio.BarHeights[i] = radio.BarHeights[i] * 0.99
+                        radio.BarHeights[i] = radio.BarHeights[i] * decay
                         radio.BarHeights[i] = math.max( radio.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
 
                         if i > 1 then
                             -- ripple
-                            radio.BarHeights[i] = Lerp( 0.5, radio.BarHeights[i], unRippledHeights[i - 1] )
+                            radio.BarHeights[i] = Lerp( ripple, radio.BarHeights[i], unRippledHeights[i - 1] )
                         end
 
                         if i < #fft then
                             -- ripple
-                            radio.BarHeights[i + 1] = Lerp( 0.5, radio.BarHeights[i + 1], unRippledHeights[i] )
+                            radio.BarHeights[i + 1] = Lerp( ripple, radio.BarHeights[i + 1], unRippledHeights[i] )
                         end
                     end
                 end
