@@ -134,6 +134,7 @@ function ENT:SetupDataTables()
 
                 sound.PlayURL( url, "noplay 3d noblock", function( station )
                     if not IsValid( station ) then return end
+                    if not IsValid( self ) then return end
                     self._AudioChannel = station
                     station:SetPos( self:GetPos() )
                     station:Set3DFadeDistance( 1000, 1000 )
@@ -224,6 +225,7 @@ if SERVER then
 
     function ENT:PostEntityPaste( ply )
         self:SetDataCreator( ply )
+        ply:AddCount( "g-wave_radios", self )
     end
 
     function ENT:Use( activator )
