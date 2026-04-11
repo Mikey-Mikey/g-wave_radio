@@ -543,7 +543,6 @@ if CLIENT then
 
         -- Advance queue and update server queue
         if audioValid and self:GetPlaying() then
-            print( self:GetDataCreator(), self:GetPlaying(), self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() )
             if self:GetDataCreator() == LocalPlayer() and self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() then
                 net.Start( "gwave_operation" )
                 net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
