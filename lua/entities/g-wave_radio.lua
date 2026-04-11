@@ -16,7 +16,6 @@ ENT.Radius = 1500
 ENT.PlaybackRate = 1
 ENT._CurrentBassVolume = 0
 ENT.Time = 0
-ENT.ChangingSong = false
 ENT.BarHeights = {}
 ENT.AverageVol = 0
 ENT.MaxQueueSize = 32
@@ -111,92 +110,51 @@ end
 function ENT:SetupDataTables()
     self:NetworkVar( "Entity", "DataCreator" )
     self:NetworkVar( "String", "URL" )
-    self:NetworkVar( "Float", "StartTime" )
     self:NetworkVar( "Float", "Duration" )
     self:NetworkVar( "Bool", "Playing" )
     self:NetworkVar( "String", "State" )
     self:NetworkVar( "Float", "RadioVolume" )
     self:NetworkVar( "Bool", "Looping" )
+    -- PlayStartTime: server CurTime() when playback started/resumed (0 when paused/stopped)
+    -- PlayStartOffset: seek position in seconds at that moment
+    -- Current position = (CurTime() - PlayStartTime) + PlayStartOffset
+    self:NetworkVar( "Float", "PlayStartTime" )
+    self:NetworkVar( "Float", "PlayStartOffset" )
 
     if CLIENT then
         self:NetworkVarNotify( "URL", function( _, _, old, new )
-            timer.Simple( 0, function() -- 0 Timer to make sure URL, StartTime and Duration are updated before this runs
+            if not IsValid( self ) then return end
+            timer.Simple( 0, function()
                 if not IsValid( self ) then return end
-                local url = new
-                url = string.gsub( url, "%|.*$", "" )
-                if not url or url == "" then return end
-
-
-                if IsValid( self._AudioChannel ) then
-                    self._AudioChannel:Stop()
-                    self._AudioChannel = nil
+                local url = string.gsub( new, "%|.*$", "" )
+                if url == "" then
+                    self:StopAudio()
+                    return
                 end
-
-                sound.PlayURL( url, "noplay 3d noblock", function( station )
-                    if not IsValid( station ) then return end
-                    if not IsValid( self ) then return end
-                    self._AudioChannel = station
-                    station:SetPos( self:GetPos() )
-                    station:Set3DFadeDistance( 1000, 1000 )
-                    station:SetVolume( 1 )
-                    if self:GetPlaying() then
-                        station:Play()
-                        --timer.Simple( 0, function()
-                            --print( self._CurrentTime )
-                            station:SetTime( self._SavedTime or 0 )
-                        --end )
-                    end
-                    self.ChangingSong = false
-                end )
+                -- Stop the old channel so it doesn't keep playing the previous song
+                self:StopAudio()
+                if self:GetPlaying() then
+                    self:LoadUrl( url )
+                end
             end )
         end )
 
-        self:NetworkVarNotify( "Playing", function( _, _, old, new )
+        self:NetworkVarNotify( "Playing", function()
             if not IsValid( self ) then return end
-            GWAVE.Print( "Playing: " .. tostring( new ) )
-            if new then
-                if not IsValid( self._AudioChannel ) then
-                    local url = self:GetURL()
-                    -- trim delimiter
-                    local delimiter = "%[|%]"
-                    url = string.gsub( url, "%|.*$", "" )
-                    sound.PlayURL( url, "noplay 3d noblock", function( station )
-                        if not IsValid( station ) then return end
-                        self._AudioChannel = station
-                        station:SetPos( self:GetPos() )
-                        station:Set3DFadeDistance( 1000, 1000 )
-                        station:SetVolume( 1 )
-                        if new then
-                            station:Play()
-                            self._TryingSaveFix = false
-                        end
-                    end )
+            timer.Simple( 0, function()
+                if not IsValid( self ) then return end
+
+                if not self:GetPlaying() then
+                    self:StopAudio()
                     return
                 end
-                local elapsed = self:GetStartTime()
-                local duration = self:GetDuration()
-                if elapsed < duration and self._AudioChannel:GetState() == GMOD_CHANNEL_PAUSED then
-                    self._AudioChannel:Play()
-                    self._AudioChannel:SetTime( self:GetStartTime() )
-                else
-                    if self._AudioChannel then
-                        self._AudioChannel:Stop()
-                        self._AudioChannel = nil
-                    end
-                    sound.PlayURL( self:GetURL(), "noplay 3d noblock", function( station )
-                        if not IsValid( station ) then return end
-                        self._AudioChannel = station
-                        station:SetPos( self:GetPos() )
-                        station:Set3DFadeDistance( 1000, 1000 )
-                        station:SetVolume( 1 )
-                        station:Play()
-                        self._TryingSaveFix = false
-                    end )
-                    --self._AudioChannel:Stop()
+
+                local url = self:GetURL()
+                url = string.gsub( url, "%|.*$", "" )
+                if url and url ~= "" then
+                    self:LoadUrl( url )
                 end
-            elseif self._AudioChannel then
-                self._AudioChannel:Pause()
-            end
+            end )
         end )
     end
 end
@@ -213,6 +171,8 @@ if SERVER then
         timer.Simple( 0, function()
             self:SetState( tbl.DT.State )
             self:SetPlaying( tbl.DT.Playing )
+            self:SetPlayStartTime( CurTime() )
+            self:SetPlayStartOffset( 0 )
         end )
 
         if tbl.Skin then
@@ -282,7 +242,8 @@ if SERVER then
         local current = self:RemoveFromQueue( 1 )
         self:SetURL( current.url .. "|" .. os.time() )
         self:SetDuration( current.duration )
-        self:SetStartTime( 0 )
+        self:SetPlayStartOffset( 0 )
+        self:SetPlayStartTime( CurTime() )
         self:SetState( "playing" )
         self:SetPlaying( true )
     end
@@ -308,9 +269,10 @@ if SERVER then
 
         self:SetURL( current.url .. "|" .. os.time() )
         self:SetDuration( current.duration )
+        self:SetPlayStartOffset( 0 )
+        self:SetPlayStartTime( CurTime() )
         self:SetPlaying( true )
         self:SetState( "playing" )
-        self:SetStartTime( 0 )
     end
 
     function ENT:SpawnFunction( ply, tr )
@@ -348,7 +310,7 @@ if SERVER then
         end
         return false
     end
-    
+
     net.Receive( "gwave_operation", function( _, ply )
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
         local radio = net.ReadEntity()
@@ -380,33 +342,40 @@ if SERVER then
             radio:SetPlaying( false )
             radio:SetState( "stopped" )
         elseif opcode == GWAVE.OPCODES.PLAY then
-            local time = net.ReadFloat()
-            radio:SetPlaying( true )
-            radio:SetState( "playing" )
-
             if #radio:GetQueue() > 0 and radio:GetURL() == "" then
                 radio:PlayFirstSong()
+            else
+                -- Resume: advance offset to the paused position, restart the clock
+                radio:SetPlayStartTime( CurTime() )
+                radio:SetPlaying( true )
+                radio:SetState( "playing" )
             end
 
         elseif opcode == GWAVE.OPCODES.PAUSE then
-            local time = net.ReadFloat()
-            radio:SetStartTime( time )
+            -- Freeze offset at the current computed position so resumers seek correctly
+            local elapsed = ( CurTime() - radio:GetPlayStartTime() ) + radio:GetPlayStartOffset()
+            radio:SetPlayStartOffset( math.max( 0, elapsed ) )
+            radio:SetPlayStartTime( 0 )
             radio:SetPlaying( false )
             radio:SetState( "paused" )
         elseif opcode == GWAVE.OPCODES.SKIP then
             if #radio:GetQueue() > 0 or radio:GetLooping() then
                 radio:PlayNextSong()
-                radio:SetPlaying( true )
-                radio:SetState( "playing" )
+            else
+                radio:SetPlaying( false )
+                radio:SetState( "stopped" )
+                radio:SetURL( "" )
             end
         elseif opcode == GWAVE.OPCODES.TIME then
             local time = net.ReadFloat()
+            -- Persist seek position so late-joining clients start at the right place
+            radio:SetPlayStartOffset( time )
+            radio:SetPlayStartTime( radio:GetPlaying() and CurTime() or 0 )
             net.Start( "gwave_operation" )
             net.WriteUInt( GWAVE.OPCODES.TIME, GWAVE.OPCODECOUNT )
             net.WriteEntity( radio )
             net.WriteFloat( time )
             net.Broadcast()
-            radio:SetStartTime( time )
         elseif opcode == GWAVE.OPCODES.VOLUME then
             local volume = net.ReadFloat()
             radio:SetRadioVolume( math.Clamp( volume, 0, 1 ) )
@@ -417,6 +386,83 @@ if SERVER then
 end
 
 if CLIENT then
+    function ENT:GetAudioChannel()
+        return IsValid( self._AudioChannel ) and self._AudioChannel or nil
+    end
+
+    function ENT:StopAudio()
+        self._AudioChannel_URL = nil
+        if IsValid( self._AudioChannel ) then
+            self._AudioChannel:Stop()
+            self._AudioChannel = nil
+        end
+    end
+
+    function ENT:GetCurrentPlayingURL()
+        if IsValid( self._AudioChannel ) then
+            return self._AudioChannel_URL
+        end
+        return nil
+    end
+
+    function ENT:GetElapsedTime()
+        local startTime = self:GetPlayStartTime()
+        local offset = self:GetPlayStartOffset()
+        local elapsed
+        if startTime > 0 then
+            elapsed = ( CurTime() - startTime ) + offset
+        else
+            elapsed = offset
+        end
+        elapsed = math.max( 0, elapsed )
+        return elapsed
+    end
+
+    ENT._IsLoading = false
+    function ENT:LoadUrl( url )
+        if self:GetCurrentPlayingURL() == url then return end
+        if self._IsLoading then return end
+
+        self._IsLoading = true
+        sound.PlayURL( url, "noplay 3d noblock", function( station )
+            self._IsLoading = false
+            if not IsValid( station ) then
+                self:StopAudio()
+                return
+            end
+
+            if not IsValid( self ) then
+                station:Stop()
+                return
+            end
+
+            self._AudioChannel = station
+            self._AudioChannel_URL = url
+
+            station:SetPos( self:GetPos() )
+            station:Set3DFadeDistance( 1000, 1000 )
+            station:SetVolume( 1 )
+
+            if self:GetElapsedTime() > 0 then
+                timer.Create( "gwave_bufferload_" .. self:EntIndex(), 0, 0, function()
+                    if not IsValid( self ) or not IsValid( station ) then
+                        timer.Remove( "gwave_bufferload_" .. self:EntIndex() )
+                        return
+                    end
+
+                    local elapsed = self:GetElapsedTime()
+                    if station:GetBufferedTime() >= elapsed then
+                        station:SetTime( elapsed )
+                        station:Play()
+                        timer.Remove( "gwave_bufferload_" .. self:EntIndex() )
+                    end
+                end )
+            else
+                station:Play()
+            end
+        end )
+    end
+
     net.Receive( "gwave_operation", function()
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
         local radio = net.ReadEntity()
@@ -433,63 +479,23 @@ if CLIENT then
                 local url = radio:GetURL()
                 url = string.gsub( url, "%|.*$", "" )
                 if url and url ~= "" then
-                    sound.PlayURL( url, "noplay 3d noblock", function( station )
-                        if not IsValid( station ) then return end
-                        if not IsValid( radio ) then
-                            station:Stop()
-                            return
-                        end
-                        if IsValid( radio._AudioChannel ) then
-                            radio._AudioChannel:Stop()
-                        end
-                        radio._AudioChannel = station
-                        station:SetPos( radio:GetPos() )
-                        station:Set3DFadeDistance( 1000, 1000 )
-                        station:SetVolume( 1 )
-                        station:SetTime( time )
-                        if radio:GetPlaying() then
-                            station:Play()
-                        end
-                    end )
+                    radio:LoadUrl( url )
                 end
             end
         end
     end )
 
-    function ENT:OnRemove( fullUpdate )
-        --if not fullUpdate then return end
-
-        if fullUpdate then
-            if IsValid( self._AudioChannel ) then
-                self._SavedTime = self._AudioChannel:GetTime()
-                self:SetPlaying( false )
-            end
-        else
-            if IsValid( self._AudioChannel ) then
-                self._AudioChannel:Stop()
-                self._AudioChannel = nil
-            end
-        end
-
-        
+    function ENT:OnRemove()
+        self:StopAudio()
     end
 
     function ENT:Think()
-        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() ~= GMOD_CHANNEL_PLAYING and self:GetPlaying() then
-            self._AudioChannel:Play()
-        end
-
-        if not IsValid( self._AudioChannel ) and self:GetPlaying() and self:GetURL() ~= "" and not self._TryingSaveFix then
-            self._TryingSaveFix = true
-            self:SetPlaying( false )
-            self:SetPlaying( true )
-        end
-
-        if IsValid( self._AudioChannel ) and self:GetPlaying() then
+        local audioValid = IsValid( self._AudioChannel )
+        if audioValid and self:GetPlaying() then
             self._AudioChannel:SetPos( self:GetPos() )
             local eyeOffset = self:GetPos() - EyePos()
             local eyeDist2 = eyeOffset:LengthSqr()
-            
+
             if eyeDist2 > self.Radius^2 then
                 self._AudioChannel:SetVolume( 0 )
             else
@@ -536,19 +542,21 @@ if CLIENT then
         end
 
         -- Advance queue and update server queue
-        if self:GetDataCreator() == LocalPlayer() and IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED then
-            if not self.ChangingSong and self:GetURL() ~= "" then
-                self.ChangingSong = true
-                if (self._queue and #self._queue > 0) or self:GetLooping() then
-                    net.Start( "gwave_operation" )
-                    net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
-                    net.WriteEntity( self )
-                    net.SendToServer()
-                else
-                    self.ChangingSong = false
+        if audioValid and self:GetPlaying() then
+            if self:GetDataCreator() == LocalPlayer() and self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() then
+                net.Start( "gwave_operation" )
+                net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
+                net.WriteEntity( self )
+                net.SendToServer()
+            else
+                if self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self._AudioChannel:GetTime() < self._AudioChannel:GetLength() * 0.90 then
+                    self._AudioChannel:Play()
                 end
             end
         end
+
+        self:SetNextClientThink( CurTime() )
+        return true
     end
 
     function ENT:Draw()
@@ -624,7 +632,7 @@ if CLIENT then
             if ch and playing then
                 -- rectangle visualizer
                 local fft = {}
-                ch:FFT( fft, FFT_256)
+                ch:FFT( fft, FFT_256 )
                 local barWidth = math.floor( w / #fft / 2 )
 
                 --local highestDb = math.max( 0, 20 * math.log10( fft[highestIndex] ) + 12 ) / 16
@@ -640,7 +648,7 @@ if CLIENT then
                 local iterCount = math.max( 1, math.Round( dt * 120 ) )
                 local stepTime = dt / iterCount
                 local relativeStep = stepTime * 120
-                
+
                 local decay = math.pow( 0.99, relativeStep )
                 local ripple = 1 - math.pow( 0.5, relativeStep )
 

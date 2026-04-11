@@ -176,7 +176,7 @@ function GWave.OpenRadioMenu( radio, queue )
     dhtml:AddFunction( "gwave", "seek", function( progress )
         local dur = radio:GetDuration()
         if not dur or dur <= 0 then return end
-        
+
         local time = dur * math.Clamp( tonumber( progress ) or 0, 0, 1 )
         net.Start( "gwave_operation" )
         net.WriteUInt( GWAVE.OPCODES.TIME, GWAVE.OPCODECOUNT )
@@ -204,7 +204,6 @@ function GWave.OpenRadioMenu( radio, queue )
             net.WriteUInt( GWAVE.OPCODES.PLAY, GWAVE.OPCODECOUNT )
         end
         net.WriteEntity( radio )
-        net.WriteFloat( radio._AudioChannel and radio._AudioChannel:GetTime() or 0 )
         net.SendToServer()
         playButtonSound()
     end )
