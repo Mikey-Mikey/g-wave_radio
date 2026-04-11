@@ -488,7 +488,7 @@ if CLIENT then
     end
 
     function ENT:Think()
-        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() ~= GMOD_CHANNEL_PLAYING and self:GetPlaying() then
+        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self:GetPlaying() then
             self._AudioChannel:Play()
         end
 
