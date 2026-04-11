@@ -155,6 +155,8 @@ if SERVER then
         timer.Simple( 0, function()
             self:SetState( tbl.DT.State )
             self:SetPlaying( tbl.DT.Playing )
+            self:SetPlayStartTime( 0 )
+            self:SetPlayStartOffset( 0 )
         end )
 
         if tbl.Skin then
