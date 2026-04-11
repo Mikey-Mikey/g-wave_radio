@@ -16,7 +16,6 @@ ENT.Radius = 1500
 ENT.PlaybackRate = 1
 ENT._CurrentBassVolume = 0
 ENT.Time = 0
-ENT.ChangingSong = false
 ENT.BarHeights = {}
 ENT.AverageVol = 0
 ENT.MaxQueueSize = 32
@@ -362,6 +361,10 @@ if SERVER then
         elseif opcode == GWAVE.OPCODES.SKIP then
             if #radio:GetQueue() > 0 or radio:GetLooping() then
                 radio:PlayNextSong()
+            else
+                radio:SetPlaying( false )
+                radio:SetState( "stopped" )
+                radio:SetURL( "" )
             end
         elseif opcode == GWAVE.OPCODES.TIME then
             local time = net.ReadFloat()
@@ -435,7 +438,6 @@ if CLIENT then
 
             self._AudioChannel = station
             self._AudioChannel_URL = url
-            self.ChangingSong = false
 
             station:SetPos( self:GetPos() )
             station:Set3DFadeDistance( 1000, 1000 )
@@ -488,11 +490,8 @@ if CLIENT then
     end
 
     function ENT:Think()
-        if IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self:GetPlaying() then
-            self._AudioChannel:Play()
-        end
-
-        if IsValid( self._AudioChannel ) and self:GetPlaying() then
+        local audioValid = IsValid( self._AudioChannel )
+        if audioValid and self:GetPlaying() then
             self._AudioChannel:SetPos( self:GetPos() )
             local eyeOffset = self:GetPos() - EyePos()
             local eyeDist2 = eyeOffset:LengthSqr()
@@ -543,19 +542,22 @@ if CLIENT then
         end
 
         -- Advance queue and update server queue
-        if self:GetDataCreator() == LocalPlayer() and IsValid( self._AudioChannel ) and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED then
-            if not self.ChangingSong and self:GetURL() ~= "" then
-                self.ChangingSong = true
-                if (self._queue and #self._queue > 0) or self:GetLooping() then
-                    net.Start( "gwave_operation" )
-                    net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
-                    net.WriteEntity( self )
-                    net.SendToServer()
-                else
-                    self.ChangingSong = false
+        if audioValid and self:GetPlaying() then
+            print( self:GetDataCreator(), self:GetPlaying(), self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() )
+            if self:GetDataCreator() == LocalPlayer() and self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() then
+                net.Start( "gwave_operation" )
+                net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
+                net.WriteEntity( self )
+                net.SendToServer()
+            else
+                if self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self._AudioChannel:GetTime() < self._AudioChannel:GetLength() * 0.90 then
+                    self._AudioChannel:Play()
                 end
             end
         end
+
+        self:SetNextClientThink( CurTime() )
+        return true
     end
 
     function ENT:Draw()
