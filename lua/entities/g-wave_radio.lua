@@ -155,7 +155,7 @@ if SERVER then
         timer.Simple( 0, function()
             self:SetState( tbl.DT.State )
             self:SetPlaying( tbl.DT.Playing )
-            self:SetPlayStartTime( 0 )
+            self:SetPlayStartTime( CurTime() )
             self:SetPlayStartOffset( 0 )
         end )
 
@@ -387,6 +387,19 @@ if CLIENT then
         return nil
     end
 
+    function ENT:GetElapsedTime()
+        local startTime = self:GetPlayStartTime()
+        local offset = self:GetPlayStartOffset()
+        local elapsed
+        if startTime > 0 then
+            elapsed = ( CurTime() - startTime ) + offset
+        else
+            elapsed = offset
+        end
+        elapsed = math.max( 0, elapsed )
+        return elapsed
+    end
+
     ENT._IsLoading = false
     function ENT:LoadUrl( url )
         if self:GetCurrentPlayingURL() == url then return end
@@ -412,23 +425,14 @@ if CLIENT then
             station:Set3DFadeDistance( 1000, 1000 )
             station:SetVolume( 1 )
 
-            -- Seek to the correct position based on server-tracked play time
-            local startTime = self:GetPlayStartTime()
-            local offset = self:GetPlayStartOffset()
-            local elapsed
-            if startTime > 0 then
-                elapsed = ( CurTime() - startTime ) + offset
-            else
-                elapsed = offset
-            end
-            elapsed = math.max( 0, elapsed )
-            if elapsed > 0 then
-                timer.Create( "gwave_bufferload_" .. self:EntIndex(), 0.1, 0, function()
+            if self:GetElapsedTime() > 0 then
+                timer.Create( "gwave_bufferload_" .. self:EntIndex(), 0, 0, function()
                     if not IsValid( self ) or not IsValid( station ) then
                         timer.Remove( "gwave_bufferload_" .. self:EntIndex() )
                         return
                     end
 
+                    local elapsed = self:GetElapsedTime()
                     if station:GetBufferedTime() >= elapsed then
                         station:SetTime( elapsed )
                         station:Play()
