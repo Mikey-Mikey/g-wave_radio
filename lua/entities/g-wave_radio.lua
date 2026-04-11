@@ -123,6 +123,23 @@ function ENT:SetupDataTables()
     self:NetworkVar( "Float", "PlayStartOffset" )
 
     if CLIENT then
+        self:NetworkVarNotify( "URL", function( _, _, old, new )
+            if not IsValid( self ) then return end
+            timer.Simple( 0, function()
+                if not IsValid( self ) then return end
+                local url = string.gsub( new, "%|.*$", "" )
+                if url == "" then
+                    self:StopAudio()
+                    return
+                end
+                -- Stop the old channel so it doesn't keep playing the previous song
+                self:StopAudio()
+                if self:GetPlaying() then
+                    self:LoadUrl( url )
+                end
+            end )
+        end )
+
         self:NetworkVarNotify( "Playing", function()
             if not IsValid( self ) then return end
             timer.Simple( 0, function()
@@ -345,8 +362,6 @@ if SERVER then
         elseif opcode == GWAVE.OPCODES.SKIP then
             if #radio:GetQueue() > 0 or radio:GetLooping() then
                 radio:PlayNextSong()
-                radio:SetPlaying( true )
-                radio:SetState( "playing" )
             end
         elseif opcode == GWAVE.OPCODES.TIME then
             local time = net.ReadFloat()
@@ -420,6 +435,7 @@ if CLIENT then
 
             self._AudioChannel = station
             self._AudioChannel_URL = url
+            self.ChangingSong = false
 
             station:SetPos( self:GetPos() )
             station:Set3DFadeDistance( 1000, 1000 )
