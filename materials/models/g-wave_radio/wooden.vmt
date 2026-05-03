@@ -1,5 +1,5 @@
 "VertexLitGeneric"
 {
 	"$basetexture" "models/g-wave_radio/wooden"
-	"$selfillum" "1"
+	"$model" "1"
 }
