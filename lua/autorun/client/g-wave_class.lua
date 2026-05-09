@@ -122,13 +122,14 @@ function GWave.OpenRadioMenu( radio, queue )
         self:MouseCapture( false )
     end
 
-    -- ── Helper: escape a string for safe JS single-quote literal ──
     local function jsStr( s )
         s = tostring( s or "" )
         s = s:gsub( "\\", "\\\\" )
-        s:gsub( "'",  "\\'" )
+        s = s:gsub( "'",  "\\'" )
         s = s:gsub( "\n", "\\n" )
         s = s:gsub( "\r", "" )
+        s = s:gsub( "<", "\\x3c" )
+        s = s:gsub( ">", "\\x3e" )
         return s
     end
 
