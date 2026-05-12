@@ -300,6 +300,13 @@ if SERVER then
 
         return ent
     end
+    
+    duplicator.RegisterEntityClass( "g-wave_radio", function( ply, data )
+        if ply:CheckLimit( "g-wave_radios" ) then
+            return duplicator.GenericDuplicatorFunction( ply, data )
+        end
+    end, "Data" )
+    
 
     local function checkWhitelist( url )
         if not GWAVE.Whitelist then return true end
