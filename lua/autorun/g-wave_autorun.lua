@@ -100,4 +100,28 @@ if CLIENT then
     end )
 
     list.Set( "ContentCategoryIcons", "G-Wave Radio", "materials/icon16/sound.png" )
+
+
+    file.CreateDir( "g-wave_cache" )
+
+    -- Clear cache
+    local function clearCache()
+        local files = file.Find( "g-wave_cache/*", "DATA" )
+
+        if #files == 0 then
+            print( "[GWAVE]: No files found" )
+
+            return
+        end
+
+        for _, path in ipairs( files ) do
+            file.Delete( "g-wave_cache/" .. path )
+        end
+
+        print( "[GWAVE]: Cleared " .. #files .. " file(s)" )
+    end
+
+    clearCache()
+
+    concommand.Add( "g-wave_clear_cache", clearCache )
 end

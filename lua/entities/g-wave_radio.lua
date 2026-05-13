@@ -426,48 +426,73 @@ if CLIENT then
     end
 
     ENT._IsLoading = false
-    function ENT:LoadUrl( url )
-        if self:GetCurrentPlayingURL() == url then return end
-        if self._IsLoading then return end
 
-        self._IsLoading = true
-        sound.PlayURL( url, "noplay 3d noblock", function( station )
-            self._IsLoading = false
-            if not IsValid( station ) then
-                self:StopAudio()
+    do
+        local function playStation( radio, url, filepath )
+            sound.PlayFile( "data/" .. filepath, "noplay 3d noblock", function( station )
+                radio._IsLoading = false
+
+                if not IsValid( station ) then
+                    radio:StopAudio()
+
+                    return
+                end
+
+                if not IsValid( radio ) then
+                    station:Stop()
+
+                    return
+                end
+
+                radio._AudioChannel = station
+                radio._AudioChannel_URL = url
+
+                station:SetPos( radio:GetPos() )
+                station:Set3DFadeDistance( 1000, 1000 )
+                station:SetVolume( 1 )
+
+                if radio:GetElapsedTime() > 0 then
+                    timer.Create( "gwave_bufferload_" .. radio:EntIndex(), 0, 0, function()
+                        if not IsValid( radio ) or not IsValid( station ) then
+                            timer.Remove( "gwave_bufferload_" .. radio:EntIndex() )
+
+                            return
+                        end
+
+                        local elapsed = radio:GetElapsedTime()
+                        if station:GetBufferedTime() >= elapsed then
+                            station:SetTime( elapsed )
+                            station:Play()
+                            timer.Remove( "gwave_bufferload_" .. radio:EntIndex() )
+                        end
+                    end )
+                else
+                    station:Play()
+                end
+            end )
+        end
+        
+        function ENT:LoadUrl( url )
+            if self:GetCurrentPlayingURL() == url then return end
+            if self._IsLoading then return end
+
+            local filepath = "g-wave_cache/" .. util.CRC( url ) .. "." .. string.GetExtensionFromFilename( url ):Left( 3 )
+            self._IsLoading = true
+
+            if file.Exists( filepath, "DATA" ) then
+                playStation( self, url, filepath )
+
                 return
             end
 
-            if not IsValid( self ) then
-                station:Stop()
-                return
-            end
+            http.Fetch( url, function( body )
+                file.Write( filepath, body )
 
-            self._AudioChannel = station
-            self._AudioChannel_URL = url
-
-            station:SetPos( self:GetPos() )
-            station:Set3DFadeDistance( 1000, 1000 )
-            station:SetVolume( 1 )
-
-            if self:GetElapsedTime() > 0 then
-                timer.Create( "gwave_bufferload_" .. self:EntIndex(), 0, 0, function()
-                    if not IsValid( self ) or not IsValid( station ) then
-                        timer.Remove( "gwave_bufferload_" .. self:EntIndex() )
-                        return
-                    end
-
-                    local elapsed = self:GetElapsedTime()
-                    if station:GetBufferedTime() >= elapsed then
-                        station:SetTime( elapsed )
-                        station:Play()
-                        timer.Remove( "gwave_bufferload_" .. self:EntIndex() )
-                    end
-                end )
-            else
-                station:Play()
-            end
-        end )
+                if IsValid( self ) then
+                    playStation( self, url, filepath )
+                end
+            end )
+        end
     end
 
     net.Receive( "gwave_operation", function()
