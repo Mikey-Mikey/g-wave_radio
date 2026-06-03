@@ -423,6 +423,11 @@ if CLIENT then
         if self:GetCurrentPlayingURL() == url then return end
         if self._IsLoading then return end
 
+        if IsValid( self._AudioChannel ) then
+            self._AudioChannel:Stop()
+            self._AudioChannel = nil
+        end
+
         self._IsLoading = true
         sound.PlayURL( url, "noplay 3d noblock", function( station )
             self._IsLoading = false
@@ -505,7 +510,7 @@ if CLIENT then
                 realVolume = math.min( realVolume * radioVol, radioVol )
 
                 local dot = eyeOffset:GetNormalized():Dot( EyeAngles():Forward() )
-                realVolume = realVolume * math.max( 0.5, ( math.min( dot, 0 ) + 1 ) )
+                realVolume = realVolume * math.max( 0.5, math.min( dot, 0 ) + 1 )
                 realVolume = realVolume * GWAVE.VolumeMultiplier:GetFloat()
 
                 self._AudioChannel:SetVolume( realVolume * 2 )
