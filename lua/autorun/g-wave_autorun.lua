@@ -12,6 +12,7 @@ GWAVE.OPCODES = {
     TIME = 8,
     VOLUME = 9,
     LOOP = 10,
+    RADIUS = 11,
 }
 
 GWAVE.OPCODECOUNT = math.ceil( math.log( table.Count( GWAVE.OPCODES ) + 1, 2 ) )

@@ -31,35 +31,30 @@ local params = [[
 $smooth 1
 $mips 1
 ]]
-local btnSnd
-local errSnd
-if game.GetWorld() and IsValid( LocalPlayer() ) then
-    btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
-    btnSnd:SetSoundLevel( 0 )
-
-    errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
-    errSnd:SetSoundLevel( 0 )
-end
-
-hook.Add( "InitPostEntity", "InitClient", function()
-    btnSnd = CreateSound( game.GetWorld(), "buttons/lightswitch2.wav" )
-    btnSnd:SetSoundLevel( 0 )
-    
-    errSnd = CreateSound( game.GetWorld(), "buttons/button10.wav" )
-    errSnd:SetSoundLevel( 0 )
-end )
-
 local function playButtonSound()
-    btnSnd:Stop()
-    btnSnd:Play()
-    btnSnd:ChangePitch( 200 )
+    surface.PlaySound( "buttons/lightswitch2.wav" )
 end
 
 local function playErrorSound()
-    errSnd:Stop()
-    errSnd:Play()
-    errSnd:ChangePitch( 125 )
+    surface.PlaySound( "buttons/button10.wav" )
 end
+
+-- Global channel tracker to prevent leaks when entities are removed while dormant
+GWAVE.ActiveChannels = GWAVE.ActiveChannels or {}
+
+timer.Create( "GWave_AudioCleanup", 1, 0, function()
+    for entIndex, data in pairs( GWAVE.ActiveChannels ) do
+        local ent = data.ent
+        local station = data.station
+
+        if not IsValid( ent ) then
+            if IsValid( station ) then
+                station:Stop()
+            end
+            GWAVE.ActiveChannels[entIndex] = nil
+        end
+    end
+end )
 
 --- Opens the radio's menu (DHTML implementation — wiki.facepunch.com/gmod/DHTML)
 local radioMenu = nil
@@ -238,6 +233,15 @@ function GWave.OpenRadioMenu( radio, queue )
         net.SendToServer()
     end )
 
+    dhtml:AddFunction( "gwave", "setRadius", function( val )
+        if not isOwner then return end
+        net.Start( "gwave_operation" )
+        net.WriteUInt( GWAVE.OPCODES.RADIUS, GWAVE.OPCODECOUNT )
+        net.WriteEntity( radio )
+        net.WriteFloat( tonumber( val ) or 1500 )
+        net.SendToServer()
+    end )
+
     -- Remove queue item by 1-based index
     dhtml:AddFunction( "gwave", "remove", function( idx )
         if not isOwner then return end
@@ -367,6 +371,20 @@ function GWave.OpenRadioMenu( radio, queue )
             pushLooping( isLooping )
             radio._lastPushedLooping = isLooping
         end
+
+        -- Sync time display
+        local elapsed = radio:GetElapsedTime()
+        if elapsed ~= radio._lastPushedTime then
+            dhtml:Call( string.format( "window.gwaveUI.updateTime('%s')", fmtDur( elapsed ) ) )
+            radio._lastPushedTime = elapsed
+        end
+
+        -- Radius sync
+        local radius = radio:GetRadius() or 1500
+        if radius ~= radio._lastPushedRadius then
+            dhtml:Call( string.format( "window.gwaveUI.setRadius(%f)", radius ) )
+            radio._lastPushedRadius = radius
+        end
     end )
 
     -- Clean up Think hook when frame is closed
@@ -392,10 +410,10 @@ function GWave.OpenRadioMenu( radio, queue )
 
     local initURL = radio:GetURL() or ""
     initURL = string.gsub( initURL, "%|.*$", "" )
-    local initTitle    = ( initURL ~= "" ) and jsStr( getTitle( initURL ) ) or "Nothing playing"
+    local initTitle    = ( initURL ~= "" ) and getTitle( initURL ) or "Nothing playing"
     local initSubtitle = ( initURL ~= "" ) and "Now Streaming" or "Queue is empty"
     local initState    = jsStr( radio:GetState() or "stopped" )
-    local initOwner    = jsStr( frameTitle )
+    local initOwner    = frameTitle
     local initVolume   = radio:GetRadioVolume() or 1
     local initLooping  = radio:GetLooping() and "true" or "false"
 
@@ -430,6 +448,8 @@ function GWave.OpenRadioMenu( radio, queue )
 .icon-forward-step { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/forward-step.png'); }
 .icon-repeat { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/repeat.png'); }
 .icon-volume-high { -webkit-mask-image: url('asset://garrysmod/materials/vgui/icons/volume-high.png'); }
+.icon-gear { -webkit-mask-image: url('asset://garrysmod/materials/icon16/cog.png'); }
+.icon-arrow-left { -webkit-mask-image: url('asset://garrysmod/materials/icon16/arrow_left.png'); }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
   --background: #0e0e0e;
@@ -661,6 +681,25 @@ html,body{
 .q-row:hover .q-del{opacity:1;}
 .q-del:hover{background:var(--destructive);color:var(--destructive-foreground);}
 
+/* ── Views ── */
+.view-pane { display:flex; flex-direction:column; flex:1; min-height:0; }
+.hidden { display:none !important; }
+#settings-view { padding: 16px; }
+.setting-row { display:flex; flex-direction:column; gap:8px; margin-bottom:24px; }
+.setting-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
+.setting-label { font-size:14px; font-weight:600; color:var(--foreground); }
+.setting-val { font-size:12px; color:var(--primary); font-family:monospace; }
+.setting-help { font-size:12px; color:var(--muted-foreground); line-height:1.4; }
+
+#player-timer {
+  font-family: 'Inter', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+  margin-left: 10px;
+  min-width: 40px;
+}
+
 /* ── Player bar ── */
 #player{
   flex-shrink:0;
@@ -829,24 +868,48 @@ input[type=range]:disabled::-webkit-slider-thumb {
     <div id="header-text">
       <span id="header-title">]] .. initOwner .. [[</span>
     </div>
+    <button id="settings-btn" class="t-btn sm" style="background:transparent; margin-right:4px;" onmousedown="event.stopPropagation();" onclick="window.gwaveUI.toggleSettings()" title="Settings"><i class="icon icon-gear"></i></button>
     <button id="close-btn" onmousedown="event.stopPropagation();" onclick="gwave.close()" title="Close"><i class="icon icon-xmark"></i></button>
   </div>
 
-  <!-- URL row -->
-  <div id="url-row">
-    <input id="url-input" type="text" placeholder="Paste a stream URL..."
-           onkeydown="if(event.key==='Enter'){gwave.add(this.value);this.value='';}">
-    <button id="add-btn" onclick="gwave.add(document.getElementById('url-input').value);document.getElementById('url-input').value='';" title="Add to queue"><i class="icon icon-plus"></i></button>
+  <!-- Main View Container -->
+  <div id="main-view" class="view-pane">
+    <!-- URL row -->
+    <div id="url-row">
+      <input id="url-input" type="text" placeholder="Paste a stream URL..."
+             onkeydown="if(event.key==='Enter'){gwave.add(this.value);this.value='';}">
+      <button id="add-btn" onclick="gwave.add(document.getElementById('url-input').value);document.getElementById('url-input').value='';" title="Add to queue"><i class="icon icon-plus"></i></button>
+    </div>
+
+    <!-- Notice bar -->
+    <div id="notice"></div>
+
+    <!-- Queue -->
+    <div id="queue-section">
+      <div id="queue-label">Queue</div>
+      <div id="queue-list">
+        <div id="queue-empty">No tracks in queue</div>
+      </div>
+    </div>
   </div>
 
-  <!-- Notice bar -->
-  <div id="notice"></div>
+  <!-- Settings View Container -->
+  <div id="settings-view" class="view-pane hidden">
+    <div id="queue-label" style="display:flex; align-items:center; gap:8px;">
+        Settings
+    </div>
+    <div id="settings-list" style="flex:1; overflow-y:auto;">
+        <!-- Range Setting -->
+        <div class="setting-row">
+            <div class="setting-header">
+                <span class="setting-label">Playback Range</span>
+                <span id="radius-val" class="setting-val">1500u</span>
+            </div>
+            <input type="range" id="radius-slider" min="100" max="10000" step="50" style="width:100%;">
+            <span class="setting-help">How far away players can be before the audio cuts out.</span>
+        </div>
 
-  <!-- Queue -->
-  <div id="queue-section">
-    <div id="queue-label">Queue</div>
-    <div id="queue-list">
-      <div id="queue-empty">No tracks in queue</div>
+        <!-- Future settings can be added here -->
     </div>
   </div>
 
@@ -863,10 +926,11 @@ input[type=range]:disabled::-webkit-slider-thumb {
         <button id="play-btn" class="t-btn lg" onclick="gwave.playPause()" title="Play / Pause"><i class="icon icon-play"></i></button>
         <button class="t-btn sm" onclick="gwave.skip()" title="Skip"><i class="icon icon-forward-step"></i></button>
         <button id="loop-btn" class="t-btn sm" onclick="gwave.toggleLoop()" title="Loop Track"><i class="icon icon-repeat"></i></button>
+        <span id="player-timer">00:00</span>
       </div>
       <div style="flex:0 0 36%; padding-right:16px;" id="vol-container">
         <i class="icon icon-volume-high" style="color:var(--muted-foreground); font-size:12px; cursor:pointer;" onclick="if(IS_OWNER) window.gwaveUI.toggleMute();"></i>
-        <input type="range" id="vol-slider" min="0" max="1" step="0.01" oninput="if(IS_OWNER && window.gwave && gwave.volume){gwave.volume(this.value);} window.gwaveUI.updateVolSliderBg(this);">
+        <input type="range" id="vol-slider" min="0" max="1" step="0.01">
       </div>
     </div>
   </div>
@@ -936,6 +1000,11 @@ window.gwaveUI = {
     document.getElementById('np-sub').textContent   = sub;
   },
 
+  updateTime: function(formattedTime) {
+    var el = document.getElementById('player-timer');
+    if (el) el.textContent = formattedTime;
+  },
+
   setState: function(state) {
     var icon = document.querySelector('#play-btn i');
     if (!icon) return;
@@ -953,16 +1022,13 @@ window.gwaveUI = {
   },
 
   setVolume: function(vol) {
-    var s = document.getElementById('vol-slider');
-    if (document.activeElement !== s) {
-      s.value = vol;
-      this.updateVolSliderBg(s);
+    if (this.sliders && this.sliders.volume) {
+        this.sliders.volume.setValue(vol);
     }
   },
 
   updateVolSliderBg: function(el) {
-    var val = parseFloat(el.value || 0) * 100;
-    el.style.background = 'linear-gradient(to right, var(--primary) ' + val + '%, var(--muted) ' + val + '%)';
+    // Legacy support, now handled by GWaveSlider
   },
 
   toggleMute: function() {
@@ -1004,16 +1070,101 @@ window.gwaveUI = {
     }
   },
 
+  toggleSettings: function() {
+    var main = document.getElementById('main-view');
+    var settings = document.getElementById('settings-view');
+    var btn = document.querySelector('#settings-btn i');
+    
+    if (settings.classList.contains('hidden')) {
+        settings.classList.remove('hidden');
+        main.classList.add('hidden');
+        btn.classList.remove('icon-gear');
+        btn.classList.add('icon-arrow-left');
+    } else {
+        settings.classList.add('hidden');
+        main.classList.remove('hidden');
+        btn.classList.remove('icon-arrow-left');
+        btn.classList.add('icon-gear');
+    }
+  },
+
+  setRadius: function(val) {
+    if (this.sliders && this.sliders.radius) {
+        this.sliders.radius.setValue(val);
+    }
+  },
+
+  updateRadiusDisplay: function(val) {
+    // Legacy support, now handled by GWaveSlider
+  },
+
   _noop: function() {}
 };
 
+// ── Reusable Slider Class ──────────────────────────────────
+class GWaveSlider {
+    constructor(id, options = {}) {
+        this.el = document.getElementById(id);
+        if (!this.el) return;
+        
+        this.onUserChange = options.onUserChange || function(){};
+        this.onUserInput  = options.onUserInput  || function(){};
+        this.displayEl    = options.displayId ? document.getElementById(options.displayId) : null;
+        this.unit         = options.unit || '';
+
+        // Visual update on drag
+        this.el.addEventListener('input', () => {
+            this.updateBackground();
+            if (this.displayEl) this.displayEl.textContent = this.el.value + this.unit;
+            this.onUserInput(this.el.value);
+        });
+
+        // Networking update on release
+        this.el.addEventListener('change', () => {
+             if (IS_OWNER) this.onUserChange(this.el.value);
+        });
+
+        this.updateBackground();
+    }
+
+    updateBackground() {
+        const min = parseFloat(this.el.min || 0);
+        const max = parseFloat(this.el.max || 1);
+        const val = ((parseFloat(this.el.value || 0) - min) / (max - min)) * 100;
+        this.el.style.background = 'linear-gradient(to right, var(--primary) ' + val + '%, var(--muted) ' + val + '%)';
+    }
+
+    setValue(val) {
+        if (document.activeElement === this.el) return;
+        this.el.value = val;
+        this.updateBackground();
+        if (this.displayEl) this.displayEl.textContent = val + this.unit;
+    }
+}
+
 // ── Bootstrap initial state ────────────────────────────────
+window.gwaveUI.sliders = {
+    volume: new GWaveSlider('vol-slider', {
+        onUserChange: (v) => gwave.volume(v)
+    }),
+    radius: new GWaveSlider('radius-slider', {
+        displayId: 'radius-val',
+        onUserChange: (v) => gwave.setRadius(v)
+    })
+};
+
 window.gwaveUI.updateQueue(]] .. initQueueJS .. [[);
 window.gwaveUI.setState(']] .. initState .. [[');
 window.gwaveUI.setLooping(]] .. initLooping .. [[);
-document.getElementById('vol-slider').value = ]] .. initVolume .. [[;
-window.gwaveUI.updateVolSliderBg(document.getElementById('vol-slider'));
-if (!IS_OWNER) document.getElementById('vol-slider').disabled = true;
+
+window.gwaveUI.sliders.volume.setValue(]] .. initVolume .. [[);
+window.gwaveUI.sliders.radius.setValue(]] .. ( radio:GetRadius() or 1500 ) .. [[);
+
+if (!IS_OWNER) {
+    document.getElementById('vol-slider').disabled = true;
+    document.getElementById('radius-slider').disabled = true;
+    document.getElementById('settings-btn').style.display = 'none';
+}
 </script>
 </body>
 </html>]] )

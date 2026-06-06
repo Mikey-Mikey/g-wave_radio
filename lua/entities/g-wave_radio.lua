@@ -33,6 +33,7 @@ function ENT:Initialize()
         self:SetSkin( math.random( 0, self:SkinCount() - 1 ) )
         self:SetState( "stopped" )
         self:SetRadioVolume( 1 )
+        self:SetRadius( 1500 )
         if WireLib then
             local inputs = {}
 
@@ -120,6 +121,7 @@ function ENT:SetupDataTables()
     -- Current position = (CurTime() - PlayStartTime) + PlayStartOffset
     self:NetworkVar( "Float", "PlayStartTime" )
     self:NetworkVar( "Float", "PlayStartOffset" )
+    self:NetworkVar( "Float", "Radius" )
 
     if CLIENT then
         self:NetworkVarNotify( "URL", function( _, _, old, new )
@@ -145,7 +147,9 @@ function ENT:SetupDataTables()
                 if not IsValid( self ) then return end
 
                 if not self:GetPlaying() then
-                    self:StopAudio()
+                    if IsValid( self._AudioChannel ) then
+                        self._AudioChannel:Pause()
+                    end
                     return
                 end
 
@@ -162,6 +166,20 @@ end
 if SERVER then
     function ENT:Think()
         self.QueueCooldown = self.QueueCooldown - engine.TickInterval()
+
+        if self:GetPlaying() and self:GetState() == "playing" then
+            local dur = self:GetDuration()
+            if dur > 0 then
+                local startTime = self:GetPlayStartTime()
+                if startTime > 0 then
+                    local elapsed = ( CurTime() - startTime ) + self:GetPlayStartOffset()
+                    -- Add a 0.5s grace period to account for loading/buffer desync
+                    if elapsed >= dur + 0.5 then
+                        self:PlayNextSong()
+                    end
+                end
+            end
+        end
     end
 
     function ENT:OnDuplicated( tbl )
@@ -351,7 +369,7 @@ if SERVER then
         elseif opcode == GWAVE.OPCODES.PLAY then
             if #radio:GetQueue() > 0 and radio:GetURL() == "" then
                 radio:PlayFirstSong()
-            else
+            elseif radio:GetURL() ~= "" then
                 -- Resume: advance offset to the paused position, restart the clock
                 radio:SetPlayStartTime( CurTime() )
                 radio:SetPlaying( true )
@@ -388,6 +406,9 @@ if SERVER then
             radio:SetRadioVolume( math.Clamp( volume, 0, 1 ) )
         elseif opcode == GWAVE.OPCODES.LOOP then
             radio:SetLooping( not radio:GetLooping() )
+        elseif opcode == GWAVE.OPCODES.RADIUS then
+            local radius = net.ReadFloat()
+            radio:SetRadius( math.Clamp( radius, 100, 10000 ) )
         end
     end )
 end
@@ -402,6 +423,7 @@ if CLIENT then
         if IsValid( self._AudioChannel ) then
             self._AudioChannel:Stop()
             self._AudioChannel = nil
+            GWAVE.ActiveChannels[self:EntIndex()] = nil
         end
     end
 
@@ -451,9 +473,14 @@ if CLIENT then
                 radio._AudioChannel = station
                 radio._AudioChannel_URL = url
 
+                -- Register for global cleanup tracking
+                GWAVE.ActiveChannels[radio:EntIndex()] = { ent = radio, station = station }
+
                 station:SetPos( radio:GetPos() )
                 station:Set3DFadeDistance( 1000, 1000 )
-                station:SetVolume( 1 )
+                
+                -- Start muted to hide the seek blip
+                station:SetVolume( 0 )
 
                 if radio:GetElapsedTime() > 0 then
                     timer.Create( "gwave_bufferload_" .. radio:EntIndex(), 0, 0, function()
@@ -467,11 +494,18 @@ if CLIENT then
                         if station:GetBufferedTime() >= elapsed then
                             station:SetTime( elapsed )
                             station:Play()
+                            
+                            -- Delayed unmute to ensure BASS has finished the seek
+                            timer.Simple( 0.1, function()
+                                if IsValid( station ) then station:SetVolume( 1 ) end
+                            end )
+                            
                             timer.Remove( "gwave_bufferload_" .. radio:EntIndex() )
                         end
                     end )
                 else
                     station:Play()
+                    station:SetVolume( 1 )
                 end
             end )
         end
@@ -530,17 +564,29 @@ if CLIENT then
 
     function ENT:Think()
         local audioValid = IsValid( self._AudioChannel )
-        if audioValid and self:GetPlaying() then
+        local isPlaying = self:GetPlaying()
+
+        if audioValid then
+            local audioState = self._AudioChannel:GetState()
+            if isPlaying and audioState == GMOD_CHANNEL_PAUSED then
+                self._AudioChannel:Play()
+            elseif not isPlaying and audioState == GMOD_CHANNEL_PLAYING then
+                self._AudioChannel:Pause()
+            end
+        end
+
+        if audioValid and isPlaying then
             self._AudioChannel:SetPos( self:GetPos() )
             local eyeOffset = self:GetPos() - EyePos()
             local eyeDist2 = eyeOffset:LengthSqr()
+            local radius = self:GetRadius() or 1500
 
-            if eyeDist2 > self.Radius^2 then
+            if eyeDist2 > radius^2 then
                 self._AudioChannel:SetVolume( 0 )
             else
                 local radioVol = self:GetRadioVolume() or 1
                 local realVolume = 1 / ( 1 + eyeDist2 )
-                realVolume = realVolume * self.Radius^1.38
+                realVolume = realVolume * radius^1.38
                 realVolume = math.min( realVolume * radioVol, radioVol )
 
                 local dot = eyeOffset:GetNormalized():Dot( EyeAngles():Forward() )
@@ -580,18 +626,9 @@ if CLIENT then
             self:ManipulateBoneScale( 0, Vector( 1, 1, 1 ) )
         end
 
-        -- Advance queue and update server queue
-        if audioValid and self:GetPlaying() then
-            if self:GetDataCreator() == LocalPlayer() and self._AudioChannel:GetTime() >= self._AudioChannel:GetLength() then
-                net.Start( "gwave_operation" )
-                net.WriteUInt( GWAVE.OPCODES.SKIP, GWAVE.OPCODECOUNT )
-                net.WriteEntity( self )
-                net.SendToServer()
-            else
-                if self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self._AudioChannel:GetTime() < self._AudioChannel:GetLength() * 0.90 then
-                    self._AudioChannel:Play()
-                end
-            end
+        -- Ensure channel keeps playing if it stopped unexpectedly (buffer underrun)
+        if audioValid and self:GetPlaying() and self._AudioChannel:GetState() == GMOD_CHANNEL_STOPPED and self._AudioChannel:GetTime() < self._AudioChannel:GetLength() * 0.90 then
+            self._AudioChannel:Play()
         end
 
         self:SetNextClientThink( CurTime() )
