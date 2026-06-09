@@ -325,7 +325,7 @@ function GWave.OpenRadioMenu( radio, queue )
             hook.Remove( "Think", "GWave_DHMLTick_" .. tostring( dframe ) )
             return
         end
-
+        if not IsValid( radio ) then return end
         -- State change
         local state = radio:GetState() or "stopped"
         if state ~= lastState then

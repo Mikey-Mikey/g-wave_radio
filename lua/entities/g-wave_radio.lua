@@ -451,13 +451,14 @@ if CLIENT then
 
     do
         local function playStation( radio, url, filepath )
+            if not IsValid( radio ) then return end
             if IsValid( radio._AudioChannel ) then
                 radio._AudioChannel:Stop()
                 radio._AudioChannel = nil
             end
             sound.PlayFile( "data/" .. filepath, "noplay 3d noblock", function( station )
+                if not IsValid( radio ) then return end
                 radio._IsLoading = false
-
                 if not IsValid( station ) then
                     radio:StopAudio()
 
@@ -540,6 +541,7 @@ if CLIENT then
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
         local radio = net.ReadEntity()
         if not IsValid( radio ) then return end
+        if radio:GetClass() ~= "g-wave_radio" then return end
 
         if opcode == GWAVE.OPCODES.TIME then
             local time = net.ReadFloat()
