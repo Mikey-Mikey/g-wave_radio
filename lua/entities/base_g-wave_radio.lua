@@ -2,6 +2,8 @@ AddCSLuaFile()
 
 ENT.Type = "anim"
 ENT.Base = "base_anim"
+
+ENT.WantsTranslucency = true
 ENT.IsGWAVERadio = true
 
 ENT.Queue = {}
@@ -629,17 +631,15 @@ if CLIENT then
         return true
     end
 
-    function ENT:Draw( flags )
+    function ENT:DrawTranslucent( flags )
         self:DrawModel( flags )
-    end
 
-    local function drawRadioOverlay( radio )
-        local ply = LocalPlayer()
-        if not IsValid( ply ) then return end
+        local pos = self:GetPos()
+        local eyePos = EyePos()
+        if pos:DistToSqr( eyePos ) > 512 ^ 2 then return end
 
-        local pos = radio:GetPos()
-
-        local url = radio:GetURL() or ""
+        -- Radio overlay
+        local url = self:GetURL() or ""
         url = string.gsub( url, "%|.*$", "" )
 
         local text = url
@@ -654,8 +654,8 @@ if CLIENT then
             text = string.gsub( text, "%%20", " " )
         end
 
-        local state = radio:GetState() or "stopped"
-        local playing = radio:GetPlaying()
+        local state = self:GetState() or "stopped"
+        local playing = self:GetPlaying()
 
         if state == "stopped" or text == "" then
             text = "G-Wave Radio"
@@ -663,19 +663,19 @@ if CLIENT then
             text = "[Paused] " .. text
         end
 
-        local ch = radio._AudioChannel
+        local ch = self._AudioChannel
         local prog = 0
-        local dur = radio:GetDuration()
+        local dur = self:GetDuration()
         if IsValid( ch ) then
             if dur and dur > 0 then
                 prog = math.Clamp( ch:GetTime() / dur, 0, 1 )
             end
         end
 
-        local zOffset = radio:OBBMaxs().z + 12
+        local zOffset = self:OBBMaxs().z + 12
         local drawPos = pos + Vector( 0, 0, zOffset )
 
-        local ang = ( ply:EyePos() - drawPos ):Angle()
+        local ang = ( eyePos - drawPos ):Angle()
         ang.p = 0
         ang.r = 0
         ang:RotateAroundAxis( ang:Up(), 90 )
@@ -710,7 +710,7 @@ if CLIENT then
                 --self.BarHeights[1] = self.BarHeights[1] + ( highestDb * 5 - self.BarHeights[1] ) * 0.1
                 --self.BarHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
                 for i = 1, #fft do
-                    radio.BarHeights[i] = radio.BarHeights[i] or 0
+                    self.BarHeights[i] = self.BarHeights[i] or 0
                 end
 
                 local dt = FrameTime()
@@ -722,30 +722,30 @@ if CLIENT then
                 local ripple = 1 - math.pow( 0.5, relativeStep )
 
                 for iter = 1, iterCount do
-                    local unRippledHeights = table.Copy( radio.BarHeights )
+                    local unRippledHeights = table.Copy( self.BarHeights )
                     for i = 1, #fft do
                         local db = fft[i]^2 * 10--math.max( 0, 20 * math.log10( fft[i] ) + 16 ) / 4
                         db = db ^ 0.5
-                        radio.BarHeights[i] = radio.BarHeights[i] * decay
-                        radio.BarHeights[i] = math.max( radio.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
+                        self.BarHeights[i] = self.BarHeights[i] * decay
+                        self.BarHeights[i] = math.max( self.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
 
                         if i > 1 then
                             -- ripple
-                            radio.BarHeights[i] = Lerp( ripple, radio.BarHeights[i], unRippledHeights[i - 1] )
+                            self.BarHeights[i] = Lerp( ripple, self.BarHeights[i], unRippledHeights[i - 1] )
                         end
 
                         if i < #fft then
                             -- ripple
-                            radio.BarHeights[i + 1] = Lerp( ripple, radio.BarHeights[i + 1], unRippledHeights[i] )
+                            self.BarHeights[i + 1] = Lerp( ripple, self.BarHeights[i + 1], unRippledHeights[i] )
                         end
                     end
                 end
 
                 for i = 1, #fft do
                     local nx = ( i - 1 + 0.5 ) * barWidth
-                    surface.SetDrawColor( 157, 80, 187, 100 + radio.BarHeights[i] * 155 )
-                    surface.DrawRect( nx, y * 3 + h - math.floor( radio.BarHeights[i] * h ), barWidth, math.floor( radio.BarHeights[i] * h ) )
-                    surface.DrawRect( -nx, y * 3 + h - math.floor( radio.BarHeights[i] * h ), barWidth, math.floor( radio.BarHeights[i] * h ) )
+                    surface.SetDrawColor( 157, 80, 187, 100 + self.BarHeights[i] * 155 )
+                    surface.DrawRect( nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
+                    surface.DrawRect( -nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
                 end
             end
 
@@ -768,14 +768,4 @@ if CLIENT then
             end
         cam.End3D2D()
     end
-    --hook.Remove( "PostDrawOpaqueRenderables", "G-Wave_DrawRadioOverlays" )
-    hook.Add( "PostDrawTranslucentRenderables", "G-Wave_DrawRadioOverlays", function( depth, sky, sky3d )
-        if depth or sky or sky3d then return end
-        local radios = ents.FindInBox( LocalPlayer():EyePos() - Vector( 500, 500, 500 ), LocalPlayer():EyePos() + Vector( 500, 500, 500 ) )
-        for _, ent in ipairs( radios ) do
-            if ent.IsGWAVERadio then
-                drawRadioOverlay( ent )
-            end
-        end
-    end )
 end
