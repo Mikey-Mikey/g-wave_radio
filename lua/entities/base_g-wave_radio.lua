@@ -658,7 +658,7 @@ if CLIENT then
         local playing = self:GetPlaying()
 
         if state == "stopped" or text == "" then
-            text = "G-Wave Radio"
+            text = self.PrintName or "G-Wave Radio"
         elseif not playing then
             text = "[Paused] " .. text
         end
