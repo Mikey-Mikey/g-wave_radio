@@ -299,7 +299,7 @@ if SERVER then
         ent:Spawn()
         ent:Activate()
 
-        ent:SetAngles( Angle( 0, ply:EyeAngles()[2] - 90, 0 ) )
+        ent:SetAngles( Angle( 0, ply:EyeAngles()[2] - ( self.AngleOffset or 180 ), 0 ) )
         local min, max = ent:WorldSpaceAABB()
         local offset = tr.HitNormal
         offset = offset * ( max - min ) * 0.5
