@@ -295,7 +295,7 @@ if SERVER then
             return
         end
 
-        local ent = ents.Create( "g-wave_radio" )
+        local ent = ents.Create( self.ClassName )
         ent:Spawn()
         ent:Activate()
 
@@ -778,4 +778,3 @@ if CLIENT then
         end
     end )
 end
-
