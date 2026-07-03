@@ -596,34 +596,34 @@ if CLIENT then
                 realVolume = realVolume * GWAVE.VolumeMultiplier:GetFloat()
 
                 self._AudioChannel:SetVolume( realVolume * 4 )
+
+                -- Scale the radio by its loudness
+                local scale = Vector( 1, 1, 1 )
+                local fft = {}
+                self._AudioChannel:FFT( fft, FFT_1024 )
+                local samples = #fft
+
+                local maxVal = 0
+                for i = 1, samples do
+                    if not fft[i] then continue end
+                    maxVal = math.max( maxVal, fft[i] )
+                end
+
+                local lerpFactor = 1 - math.pow( 1 - 0.1, FrameTime() * 66.666 )
+                self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * lerpFactor
+
+                local squish = self._CurrentBassVolume * 0.5
+
+                squish = math.min( squish, 0.5 )
+
+                scale[1] = scale[1] + squish
+                scale[2] = scale[2] - squish
+                scale[3] = scale[3] + squish
+
+                self:ManipulateBoneScale( 0, scale )
             end
 
             self._AudioChannel:SetPlaybackRate( self.PlaybackRate )
-
-            -- Scale the radio by its loudness
-            local scale = Vector( 1, 1, 1 )
-            local fft = {}
-            self._AudioChannel:FFT( fft, FFT_1024 )
-            local samples = #fft
-
-            local maxVal = 0
-            for i = 1, samples do
-                if not fft[i] then continue end
-                maxVal = math.max( maxVal, fft[i] )
-            end
-
-            local lerpFactor = 1 - math.pow( 1 - 0.1, FrameTime() * 66.666 )
-            self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * lerpFactor
-
-            local squish = self._CurrentBassVolume * 0.5
-
-            squish = math.min( squish, 0.5 )
-
-            scale[1] = scale[1] + squish
-            scale[2] = scale[2] - squish
-            scale[3] = scale[3] + squish
-
-            self:ManipulateBoneScale( 0, scale )
         elseif self:GetManipulateBoneScale( 0 ) ~= Vector( 1, 1, 1 ) then
             self:ManipulateBoneScale( 0, Vector( 1, 1, 1 ) )
         end
