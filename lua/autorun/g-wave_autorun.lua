@@ -23,7 +23,7 @@ if not CFCHTTP then
         -- Discord
         "discordapp.com",
         "discordapp.net",
-        
+
         -- Github
         "github.com",
         "githubusercontent.com",
@@ -58,6 +58,14 @@ if SERVER then
     util.AddNetworkString( "gwave_operation" )
     util.AddNetworkString( "gwave_openmenu" )
     util.AddNetworkString( "gwave_syncqueue" )
+
+    function GWAVE.GenericDuplicatorFunction( class )
+        duplicator.RegisterEntityClass( class, function( ply, data )
+            if ply:CheckLimit( "g-wave_radios" ) then
+                return duplicator.GenericDuplicatorFunction( ply, data )
+            end
+        end, "Data" )
+    end
 end
 
 if CLIENT then
