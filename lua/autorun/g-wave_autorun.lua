@@ -103,14 +103,7 @@ if CLIENT then
         } )
     end )
 
-    hook.Add( "PreDrawTranslucentRenderables", "GWave_FixEyePos", function()
-        EyePos()
-        EyeAngles()
-    end )
-
     list.Set( "ContentCategoryIcons", "G-Wave Radio", "materials/icon16/sound.png" )
-
-
     file.CreateDir( "g-wave_cache" )
 
     -- Clear cache
