@@ -111,7 +111,7 @@ function GWave.OpenRadioMenu( radio, queue )
         dframe.Dragging = { gui.MouseX() - dframe.x, gui.MouseY() - dframe.y }
         dframe:MouseCapture( true )
     end )
-    
+
     dframe.OnMouseReleased = function( self, code )
         self.Dragging = nil
         self:MouseCapture( false )
@@ -1074,7 +1074,7 @@ window.gwaveUI = {
     var main = document.getElementById('main-view');
     var settings = document.getElementById('settings-view');
     var btn = document.querySelector('#settings-btn i');
-    
+
     if (settings.classList.contains('hidden')) {
         settings.classList.remove('hidden');
         main.classList.add('hidden');
@@ -1106,7 +1106,7 @@ class GWaveSlider {
     constructor(id, options = {}) {
         this.el = document.getElementById(id);
         if (!this.el) return;
-        
+
         this.onUserChange = options.onUserChange || function(){};
         this.onUserInput  = options.onUserInput  || function(){};
         this.displayEl    = options.displayId ? document.getElementById(options.displayId) : null;
