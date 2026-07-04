@@ -702,15 +702,17 @@ if CLIENT then
                 -- rectangle visualizer
                 local fft = {}
                 ch:FFT( fft, FFT_256 )
+
                 local barWidth = math.floor( w / #fft / 2 )
+                local barHeights = self.BarHeights
 
                 --local highestDb = math.max( 0, 20 * math.log10( fft[highestIndex] ) + 12 ) / 16
                 --print( highestDb )
-                --self.BarHeights[1] = self.BarHeights[1] or 0
-                --self.BarHeights[1] = self.BarHeights[1] + ( highestDb * 5 - self.BarHeights[1] ) * 0.1
-                --self.BarHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
+                --barHeights[1] = barHeights[1] or 0
+                --barHeights[1] = barHeights[1] + ( highestDb * 5 - barHeights[1] ) * 0.1
+                --barHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
                 for i = 1, #fft do
-                    self.BarHeights[i] = self.BarHeights[i] or 0
+                    barHeights[i] = barHeights[i] or 0
                 end
 
                 local dt = FrameTime()
@@ -722,30 +724,30 @@ if CLIENT then
                 local ripple = 1 - math.pow( 0.5, relativeStep )
 
                 for iter = 1, iterCount do
-                    local unRippledHeights = table.Copy( self.BarHeights )
+                    local unRippledHeights = table.Copy( barHeights )
                     for i = 1, #fft do
                         local db = fft[i]^2 * 10--math.max( 0, 20 * math.log10( fft[i] ) + 16 ) / 4
                         db = db ^ 0.5
-                        self.BarHeights[i] = self.BarHeights[i] * decay
-                        self.BarHeights[i] = math.max( self.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
+                        barHeights[i] = barHeights[i] * decay
+                        barHeights[i] = math.max( barHeights[i], db )--math.max( barHeights[i], barHeights[i] + ( db * 5 - barHeights[i] ) * 0.1 )
 
                         if i > 1 then
                             -- ripple
-                            self.BarHeights[i] = Lerp( ripple, self.BarHeights[i], unRippledHeights[i - 1] )
+                            barHeights[i] = Lerp( ripple, barHeights[i], unRippledHeights[i - 1] )
                         end
 
                         if i < #fft then
                             -- ripple
-                            self.BarHeights[i + 1] = Lerp( ripple, self.BarHeights[i + 1], unRippledHeights[i] )
+                            barHeights[i + 1] = Lerp( ripple, barHeights[i + 1], unRippledHeights[i] )
                         end
                     end
                 end
 
                 for i = 1, #fft do
                     local nx = ( i - 1 + 0.5 ) * barWidth
-                    surface.SetDrawColor( 157, 80, 187, 100 + self.BarHeights[i] * 155 )
-                    surface.DrawRect( nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
-                    surface.DrawRect( -nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
+                    surface.SetDrawColor( 157, 80, 187, 100 + barHeights[i] * 155 )
+                    surface.DrawRect( nx, y * 3 + h - math.floor( barHeights[i] * h ), barWidth, math.floor( barHeights[i] * h ) )
+                    surface.DrawRect( -nx, y * 3 + h - math.floor( barHeights[i] * h ), barWidth, math.floor( barHeights[i] * h ) )
                 end
             end
 
