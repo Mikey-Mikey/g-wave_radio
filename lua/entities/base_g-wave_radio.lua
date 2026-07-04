@@ -517,6 +517,7 @@ if CLIENT then
             end
 
             http.Fetch( url, function( body )
+                file.CreateDir( "g-wave_cache" )
                 file.Write( filepath, body )
 
                 if IsValid( self ) then
