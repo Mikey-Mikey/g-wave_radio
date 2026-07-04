@@ -586,38 +586,11 @@ if CLIENT then
                 realVolume = realVolume * GWAVE.VolumeMultiplier:GetFloat()
 
                 self._AudioChannel:SetVolume( realVolume * 4 )
-
-                -- Scale the radio by its loudness
-                local scale = Vector( 1, 1, 1 )
-                local fft = {}
-                self._AudioChannel:FFT( fft, FFT_1024 )
-                local samples = #fft
-
-                local maxVal = 0
-                for i = 1, samples do
-                    if not fft[i] then continue end
-                    maxVal = math.max( maxVal, fft[i] )
-                end
-
-                local lerpFactor = 1 - math.pow( 1 - 0.1, FrameTime() * 66.666 )
-                self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * lerpFactor
-
-                local squish = self._CurrentBassVolume * 0.5
-
-                squish = math.min( squish, 0.5 )
-
-                scale[1] = scale[1] + squish
-                scale[2] = scale[2] - squish
-                scale[3] = scale[3] + squish
-
-                self:ManipulateBoneScale( 0, scale )
-                self:MarkShadowAsDirty()
             end
 
             self._AudioChannel:SetPlaybackRate( self.PlaybackRate )
         elseif self:GetManipulateBoneScale( 0 ) ~= Vector( 1, 1, 1 ) then
             self:ManipulateBoneScale( 0, Vector( 1, 1, 1 ) )
-            self:MarkShadowAsDirty()
         end
 
         -- Ensure channel keeps playing if it stopped unexpectedly (buffer underrun)
@@ -629,12 +602,41 @@ if CLIENT then
         return true
     end
 
+    local defaultScale = Vector( 1, 1, 1 )
+
     function ENT:DrawTranslucent( flags )
         self:DrawModel( flags )
 
         local pos = self:GetPos()
         local eyePos = EyePos()
         if pos:DistToSqr( eyePos ) > 512 ^ 2 then return end
+
+        local ch = self._AudioChannel
+        local playing = self:GetPlaying()
+
+        -- Scale the radio by its loudness
+        if IsValid( ch ) and playing then
+            local fft = {}
+            self._AudioChannel:FFT( fft, FFT_1024 )
+
+            local maxVal = 0
+            local samples = #fft
+
+            for i = 1, samples do
+                if not fft[i] then continue end
+                maxVal = math.max( maxVal, fft[i] )
+            end
+
+            local lerpFactor = 1 - math.pow( 1 - 0.1, FrameTime() * 66.666 )
+            self._CurrentBassVolume = self._CurrentBassVolume + ( maxVal - self._CurrentBassVolume ) * lerpFactor
+
+            local squish = self._CurrentBassVolume * 0.5
+            squish = math.min( squish, 0.5 )
+
+            self:ManipulateBoneScale( 0, Vector( 1 + squish, 1 - squish, 1 + squish ) )
+        elseif self:GetManipulateBoneScale( 0 ) ~= defaultScale then
+            self:ManipulateBoneScale( 0, defaultScale )
+        end
 
         -- Radio overlay
         local url = self:GetURL() or ""
@@ -653,7 +655,6 @@ if CLIENT then
         end
 
         local state = self:GetState() or "stopped"
-        local playing = self:GetPlaying()
 
         if state == "stopped" or text == "" then
             text = self.PrintName or "G-Wave Radio"
@@ -661,7 +662,6 @@ if CLIENT then
             text = "[Paused] " .. text
         end
 
-        local ch = self._AudioChannel
         local prog = 0
         local dur = self:GetDuration()
         if IsValid( ch ) then
@@ -700,15 +700,17 @@ if CLIENT then
                 -- rectangle visualizer
                 local fft = {}
                 ch:FFT( fft, FFT_256 )
+
                 local barWidth = math.floor( w / #fft / 2 )
+                local barHeights = self.BarHeights
 
                 --local highestDb = math.max( 0, 20 * math.log10( fft[highestIndex] ) + 12 ) / 16
                 --print( highestDb )
-                --self.BarHeights[1] = self.BarHeights[1] or 0
-                --self.BarHeights[1] = self.BarHeights[1] + ( highestDb * 5 - self.BarHeights[1] ) * 0.1
-                --self.BarHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
+                --barHeights[1] = barHeights[1] or 0
+                --barHeights[1] = barHeights[1] + ( highestDb * 5 - barHeights[1] ) * 0.1
+                --barHeights[1] = math.sin( CurTime() * 30 ) * 0.5 + 0.5
                 for i = 1, #fft do
-                    self.BarHeights[i] = self.BarHeights[i] or 0
+                    barHeights[i] = barHeights[i] or 0
                 end
 
                 local dt = FrameTime()
@@ -720,30 +722,30 @@ if CLIENT then
                 local ripple = 1 - math.pow( 0.5, relativeStep )
 
                 for iter = 1, iterCount do
-                    local unRippledHeights = table.Copy( self.BarHeights )
+                    local unRippledHeights = table.Copy( barHeights )
                     for i = 1, #fft do
                         local db = fft[i]^2 * 10--math.max( 0, 20 * math.log10( fft[i] ) + 16 ) / 4
                         db = db ^ 0.5
-                        self.BarHeights[i] = self.BarHeights[i] * decay
-                        self.BarHeights[i] = math.max( self.BarHeights[i], db )--math.max( self.BarHeights[i], self.BarHeights[i] + ( db * 5 - self.BarHeights[i] ) * 0.1 )
+                        barHeights[i] = barHeights[i] * decay
+                        barHeights[i] = math.max( barHeights[i], db )--math.max( barHeights[i], barHeights[i] + ( db * 5 - barHeights[i] ) * 0.1 )
 
                         if i > 1 then
                             -- ripple
-                            self.BarHeights[i] = Lerp( ripple, self.BarHeights[i], unRippledHeights[i - 1] )
+                            barHeights[i] = Lerp( ripple, barHeights[i], unRippledHeights[i - 1] )
                         end
 
                         if i < #fft then
                             -- ripple
-                            self.BarHeights[i + 1] = Lerp( ripple, self.BarHeights[i + 1], unRippledHeights[i] )
+                            barHeights[i + 1] = Lerp( ripple, barHeights[i + 1], unRippledHeights[i] )
                         end
                     end
                 end
 
                 for i = 1, #fft do
                     local nx = ( i - 1 + 0.5 ) * barWidth
-                    surface.SetDrawColor( 157, 80, 187, 100 + self.BarHeights[i] * 155 )
-                    surface.DrawRect( nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
-                    surface.DrawRect( -nx, y * 3 + h - math.floor( self.BarHeights[i] * h ), barWidth, math.floor( self.BarHeights[i] * h ) )
+                    surface.SetDrawColor( 157, 80, 187, 100 + barHeights[i] * 155 )
+                    surface.DrawRect( nx, y * 3 + h - math.floor( barHeights[i] * h ), barWidth, math.floor( barHeights[i] * h ) )
+                    surface.DrawRect( -nx, y * 3 + h - math.floor( barHeights[i] * h ), barWidth, math.floor( barHeights[i] * h ) )
                 end
             end
 
