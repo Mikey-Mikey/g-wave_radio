@@ -207,7 +207,7 @@ if SERVER then
 
     function ENT:Use( activator )
         if not IsValid( activator ) or not activator:IsPlayer() then return end
-        if not gamemode.Call( "CanProperty", ply, "gwave_radio", self ) then return end
+        if not gamemode.Call( "CanProperty", activator, "gwave_radio", self ) then return end
         self:OpenRadioMenu( activator )
     end
 
