@@ -1,17 +1,42 @@
 --- G-WAVE Handle class
 GWave = GWave or {}
 
+local function getFileDuration( filepath, callback )
+  sound.PlayFile( "data/" .. filepath, "noplay 3d noblock", function( obj, errorID, errorName )
+      if IsValid( obj ) then
+          local duration = obj:GetLength()
+          obj:Stop()
+          obj = nil
+          callback( duration )
+      else
+          callback( nil )
+      end
+  end )
+end
+
 local function getUrlDuration( url, callback )
-    sound.PlayURL( url, "noplay 3d noblock", function( obj, errorID, errorName )
-        if IsValid( obj ) then
-            local duration = obj:GetLength()
-            obj:Stop()
-            obj = nil
-            callback( duration )
-        else
-            callback( nil )
-        end
-    end )
+  local filepath = "g-wave_cache/" .. util.SHA256( url ) .. ".dat"
+
+  if file.Exists( filepath, "DATA" ) then
+      getFileDuration( filepath, callback )
+      return
+  end
+
+  http.Fetch( url, function( body )
+      file.CreateDir( "g-wave_cache" )
+      file.Write( filepath, body )
+
+      getFileDuration( filepath, function( duration )
+          if not duration then
+              -- Return invalid cache file
+              file.Delete( filepath )
+              callback( nil )
+              return
+          end
+
+          callback( duration )
+      end )
+  end )
 end
 
 local function getTitle( path )
