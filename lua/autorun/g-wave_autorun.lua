@@ -127,3 +127,20 @@ if CLIENT then
 
     concommand.Add( "g-wave_clear_cache", clearCache )
 end
+
+function GWAVE.RegisterRadio( class, model, print_name )
+    local ent = {}
+    ent.Base = "base_g-wave_radio"
+    ent.Spawnable = true
+
+    ent.Model = model
+    ent.PrintName = print_name
+    ent.Category = "G-Wave Radio"
+    ent.Author = "Mikey"
+
+    if SERVER then
+        GWAVE.GenericDuplicatorFunction( class )
+    end
+
+    scripted_ents.Register( ent, class )
+end
