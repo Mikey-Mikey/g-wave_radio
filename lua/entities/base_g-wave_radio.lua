@@ -400,7 +400,7 @@ if SERVER then
             radio:SetLooping( not radio:GetLooping() )
         elseif opcode == GWAVE.OPCODES.RADIUS then
             local radius = net.ReadFloat()
-            radio:SetRadius( math.Clamp( radius, 100, 10000 ) )
+            radio:SetRadius( math.Clamp( radius, 100, 5000 ) )
         end
     end )
 end
