@@ -618,7 +618,6 @@ if CLIENT then
 
         -- Scale the radio by its loudness
         if IsValid( ch ) and playing then
-            print(SysTime())
             local fft = {}
             self._AudioChannel:FFT( fft, FFT_1024 )
 
