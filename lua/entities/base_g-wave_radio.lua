@@ -507,10 +507,7 @@ if CLIENT then
             if self:GetCurrentPlayingURL() == url then return end
             if self._IsLoading then return end
 
-            local extension = string.GetExtensionFromFilename( url )
-            if not extension then return end
-
-            local filepath = "g-wave_cache/" .. util.CRC( url ) .. "." .. extension:Left( 3 )
+            local filepath = "g-wave_cache/" .. util.SHA256( url ) .. ".dat"
             self._IsLoading = true
 
             if file.Exists( filepath, "DATA" ) then
