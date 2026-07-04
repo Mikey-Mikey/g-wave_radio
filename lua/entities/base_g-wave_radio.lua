@@ -106,6 +106,7 @@ function ENT:TriggerInput( inputName, value )
 end
 
 function ENT:SetupDataTables()
+    self:NetworkVar( "String", "RadioCreator" )
     self:NetworkVar( "String", "URL" )
     self:NetworkVar( "Float", "Duration" )
     self:NetworkVar( "Bool", "Playing" )
@@ -200,12 +201,13 @@ if SERVER then
     end
 
     function ENT:PostEntityPaste( ply )
+        self:SetRadioCreator( ply )
         ply:AddCount( "g-wave_radios", self )
     end
 
     function ENT:Use( activator )
         if not IsValid( activator ) or not activator:IsPlayer() then return end
-        if not gamemode.Call( "CanProperty", ply, "gwave_radio", radio ) then return end
+        if not gamemode.Call( "CanProperty", ply, "gwave_radio", self ) then return end
         self:OpenRadioMenu( activator )
     end
 
@@ -308,6 +310,7 @@ if SERVER then
         ent:SetPos( tr.HitPos + offset )
         ent:PhysWake()
 
+        ent:SetRadioCreator( ply:SteamID64() )
         ply:AddCount( "g-wave_radios", ent )
 
         return ent

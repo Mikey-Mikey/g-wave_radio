@@ -88,12 +88,12 @@ function GWave.OpenRadioMenu( radio, queue )
         radioMenu:Remove()
     end
 
-    local owner  = radio:GetCreator()
+    local owner  = player.GetBySteamID64( radio:GetRadioCreator() )
     local isOwner = gamemode.Call( "CanProperty", LocalPlayer(), "gwave_radio", radio )
     local scrW, scrH = ScrW(), ScrH()
 
     -- ── Possessive title ────────────────────────────────────
-    local ownerName = owner:IsValid() and owner:GetName() or "Unknown"
+    local ownerName = owner and owner:GetName() or "Unknown"
     local frameTitle
     if string.sub( ownerName, -1 ) == "s" then
         frameTitle = ownerName .. "' Radio"
