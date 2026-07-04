@@ -930,7 +930,7 @@ input[type=range]:disabled::-webkit-slider-thumb {
                 <span class="setting-label">Playback Range</span>
                 <span id="radius-val" class="setting-val">1500u</span>
             </div>
-            <input type="range" id="radius-slider" min="100" max="10000" step="50" style="width:100%;">
+            <input type="range" id="radius-slider" min="100" max="5000" step="50" style="width:100%;">
             <span class="setting-help">How far away players can be before the audio cuts out.</span>
         </div>
 
