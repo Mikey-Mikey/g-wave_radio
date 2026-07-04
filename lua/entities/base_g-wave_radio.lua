@@ -106,7 +106,7 @@ function ENT:TriggerInput( inputName, value )
 end
 
 function ENT:SetupDataTables()
-    self:NetworkVar( "Entity", "DataCreator" )
+    self:NetworkVar( "String", "RadioCreator" )
     self:NetworkVar( "String", "URL" )
     self:NetworkVar( "Float", "Duration" )
     self:NetworkVar( "Bool", "Playing" )
@@ -201,12 +201,13 @@ if SERVER then
     end
 
     function ENT:PostEntityPaste( ply )
-        self:SetDataCreator( ply )
+        self:SetRadioCreator( ply )
         ply:AddCount( "g-wave_radios", self )
     end
 
     function ENT:Use( activator )
-        if not IsValid( activator ) or activator ~= self:GetDataCreator() then return end
+        if not IsValid( activator ) or not activator:IsPlayer() then return end
+        if not gamemode.Call( "CanProperty", activator, "gwave_radio", self ) then return end
         self:OpenRadioMenu( activator )
     end
 
@@ -309,8 +310,7 @@ if SERVER then
         ent:SetPos( tr.HitPos + offset )
         ent:PhysWake()
 
-        ent:SetDataCreator( ply )
-
+        ent:SetRadioCreator( ply:SteamID64() )
         ply:AddCount( "g-wave_radios", ent )
 
         return ent
@@ -332,7 +332,7 @@ if SERVER then
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
         local radio = net.ReadEntity()
         if not IsValid( radio ) then return end
-        if radio:GetDataCreator() ~= ply then return end
+        if not gamemode.Call( "CanProperty", ply, "gwave_radio", radio ) then return end
 
         radio._lastOpTime = radio._lastOpTime or 0
         if CurTime() - radio._lastOpTime < 0.1 then return end
