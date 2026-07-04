@@ -128,12 +128,13 @@ if CLIENT then
     concommand.Add( "g-wave_clear_cache", clearCache )
 end
 
-function GWAVE.RegisterRadio( class, model, print_name )
+function GWAVE.RegisterRadio( class, model, print_name, angle_offset )
     local ent = {}
     ent.Base = "base_g-wave_radio"
     ent.Spawnable = true
 
     ent.Model = model
+    ent.AngleOffset = angle_offset
     ent.PrintName = print_name
     ent.Category = "G-Wave Radio"
     ent.Author = "Mikey"
