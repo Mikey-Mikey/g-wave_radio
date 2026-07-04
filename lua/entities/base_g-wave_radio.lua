@@ -613,13 +613,11 @@ if CLIENT then
                 scale[3] = scale[3] + squish
 
                 self:ManipulateBoneScale( 0, scale )
-                self:MarkShadowAsDirty()
             end
 
             self._AudioChannel:SetPlaybackRate( self.PlaybackRate )
         elseif self:GetManipulateBoneScale( 0 ) ~= Vector( 1, 1, 1 ) then
             self:ManipulateBoneScale( 0, Vector( 1, 1, 1 ) )
-            self:MarkShadowAsDirty()
         end
 
         -- Ensure channel keeps playing if it stopped unexpectedly (buffer underrun)
