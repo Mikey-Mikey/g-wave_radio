@@ -35,6 +35,7 @@ if not CFCHTTP then
         -- Google Drive
         "docs.google.com",
         "drive.google.com",
+        "drive.usercontent.google.com"
         ".googleusercontent.com",
 
         -- Other
