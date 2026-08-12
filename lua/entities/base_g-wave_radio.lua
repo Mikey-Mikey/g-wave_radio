@@ -645,10 +645,13 @@ if CLIENT then
         local text = url
         if text ~= "" then
             local pathExt = string.match( text, "([^/]+)$" )
+            
             if pathExt then
                 local name = string.match( pathExt, "^(.+)%.[^.]+$" )
                 text = name or pathExt
             end
+
+            text = string.sub( text, 1, 64 )
             text = string.Replace( text, "_", " " )
             text = string.Trim( text )
             text = string.gsub( text, "%%20", " " )
