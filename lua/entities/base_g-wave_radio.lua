@@ -649,9 +649,11 @@ if CLIENT then
                 local name = string.match( pathExt, "^(.+)%.[^.]+$" )
                 text = name or pathExt
             end
+
             text = string.Replace( text, "_", " " )
             text = string.Trim( text )
             text = string.gsub( text, "%%20", " " )
+            text = string.sub( text, 1, 64 )
         end
 
         local state = self:GetState() or "stopped"
