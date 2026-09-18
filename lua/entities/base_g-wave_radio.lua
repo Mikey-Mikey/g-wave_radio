@@ -406,6 +406,18 @@ if SERVER then
 end
 
 if CLIENT then
+    function ENT:Mute( muted )
+        self.Muted = muted
+
+        if IsValid( self._AudioChannel ) then
+            self._AudioChannel:SetVolume( muted and 0 or 1 )
+        end
+
+        if not muted then
+            self:ManipulateBoneScale( 0, Vector( 1, 1, 1 ) )
+        end
+    end
+
     function ENT:GetAudioChannel()
         return IsValid( self._AudioChannel ) and self._AudioChannel or nil
     end
@@ -490,6 +502,7 @@ if CLIENT then
 
                             -- Delayed unmute to ensure BASS has finished the seek
                             timer.Simple( 0.1, function()
+                                if radio.Muted then return end
                                 if IsValid( station ) then station:SetVolume( 1 ) end
                             end )
 
@@ -498,7 +511,10 @@ if CLIENT then
                     end )
                 else
                     station:Play()
-                    station:SetVolume( 1 )
+
+                    if not radio.Muted then
+                        station:SetVolume( 1 )
+                    end
                 end
             end )
         end
@@ -567,7 +583,7 @@ if CLIENT then
             end
         end
 
-        if audioValid and isPlaying then
+        if not self.Muted and audioValid and isPlaying then
             self._AudioChannel:SetPos( self:GetPos() )
             local eyeOffset = self:GetPos() - EyePos()
             local eyeDist2 = eyeOffset:LengthSqr()
@@ -701,7 +717,7 @@ if CLIENT then
 
             draw.RoundedBox( 12, x, y, w, h, Color( 14, 14, 14, 240 ) )
 
-            if ch and playing then
+            if not self.Muted and ch and playing then
                 -- rectangle visualizer
                 local fft = {}
                 ch:FFT( fft, FFT_256 )

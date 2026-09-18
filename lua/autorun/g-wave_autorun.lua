@@ -107,6 +107,40 @@ if CLIENT then
         } )
     end )
 
+
+    -- Property to mute/unmute
+    properties.Add( "g-wave_mute", {
+        MenuLabel = "Mute Radio",
+        MenuIcon = "icon16/sound_mute.png",
+
+        Order = 0,
+
+        Action = function( _, ent )
+            if not IsValid( ent ) then return end
+
+            ent:Mute( true )
+        end,
+        Filter = function( _, ent )
+            return ent.IsGWAVERadio and not ent.Muted
+        end
+    } )
+
+    properties.Add( "g-wave_unmute", {
+        MenuLabel = "Unmute Radio",
+        MenuIcon = "icon16/sound.png",
+
+        Order = 0,
+
+        Action = function( _, ent )
+            if not IsValid( ent ) then return end
+
+            ent:Mute( false )
+        end,
+        Filter = function( _, ent )
+            return ent.IsGWAVERadio and ent.Muted
+        end
+    } )
+
     list.Set( "ContentCategoryIcons", "G-Wave Radio", "materials/icon16/sound.png" )
     file.CreateDir( "g-wave_cache" )
 
