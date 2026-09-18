@@ -81,6 +81,7 @@ if CLIENT then
     } )
 
     GWAVE.VolumeMultiplier = CreateClientConVar( "g-wave_volume_multiplier", 1, true, false, "Sets how loud radios are for you.", 0, 1 )
+    CreateClientConVar( "g-wave_radio_overlay", 1, true, false, "Enables the radio overlay.", 0, 1 )
 
     -- Add settings to utilities
     hook.Add( "AddToolMenuCategories", "GWaveCategory", function()
@@ -91,6 +92,8 @@ if CLIENT then
         spawnmenu.AddToolMenuOption( "Utilities", "GWave", "GWave_Menu", "#GWave", "", "", function( panel )
             panel:NumSlider( "Global Volume", "g-wave_volume_multiplier", 0, 1 )
             panel:Help( "Sets how loud radios are for you." )
+
+            panel:CheckBox( "Enable radio overlay.", "g-wave_radio_overlay" )
         end )
     end )
 

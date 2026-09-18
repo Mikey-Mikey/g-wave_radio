@@ -603,6 +603,7 @@ if CLIENT then
     end
 
     local defaultScale = Vector( 1, 1, 1 )
+    local radioOverlayConvar = GetConVar( "g-wave_radio_overlay" )
 
     function ENT:DrawTranslucent( flags )
         self:DrawModel( flags )
@@ -639,6 +640,8 @@ if CLIENT then
         end
 
         -- Radio overlay
+        if not radioOverlayConvar:GetBool() then return end
+
         local url = self:GetURL() or ""
         url = string.gsub( url, "%|.*$", "" )
 
