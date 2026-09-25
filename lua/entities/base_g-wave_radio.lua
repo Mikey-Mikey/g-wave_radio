@@ -201,6 +201,11 @@ if SERVER then
     end
 
     function ENT:PostEntityPaste( ply )
+        if not ply:CheckLimit( "g-wave_radios" ) then
+            SafeRemoveEntity(self)
+            return
+        end
+
         self:SetRadioCreator( ply )
         ply:AddCount( "g-wave_radios", self )
     end
