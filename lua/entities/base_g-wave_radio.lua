@@ -321,7 +321,7 @@ if SERVER then
         return ent
     end
 
-    GWAVE.GenericDuplicatorFunction( "g-wave_radio" )
+    GWAVE.GenericDuplicatorFunction( "base_g-wave_radio" )
 
     local function checkWhitelist( url )
         if not GWAVE.Whitelist then return true end
