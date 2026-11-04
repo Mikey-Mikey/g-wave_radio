@@ -153,6 +153,16 @@ function GWave.OpenRadioMenu( radio, queue )
         return s
     end
 
+    local function htmlEsc( s )
+        s = tostring( s or "" )
+        s = s:gsub( "&", "&amp;" )
+        s = s:gsub( "<", "&lt;" )
+        s = s:gsub( ">", "&gt;" )
+        s = s:gsub( '"', "&quot;" )
+        s = s:gsub( "'", "&#39;" )
+        return s
+    end
+
     -- ── Helper: format seconds as M:SS ──────────────────────
     local function fmtDur( secs )
         if not secs or secs <= 0 then return "--:--" end
@@ -435,10 +445,10 @@ function GWave.OpenRadioMenu( radio, queue )
 
     local initURL = radio:GetURL() or ""
     initURL = string.gsub( initURL, "%|.*$", "" )
-    local initTitle    = ( initURL ~= "" ) and getTitle( initURL ) or "Nothing playing"
-    local initSubtitle = ( initURL ~= "" ) and "Now Streaming" or "Queue is empty"
+    local initTitle    = htmlEsc( ( initURL ~= "" ) and getTitle( initURL ) or "Nothing playing" )
+    local initSubtitle = htmlEsc( ( initURL ~= "" ) and "Now Streaming" or "Queue is empty" )
     local initState    = jsStr( radio:GetState() or "stopped" )
-    local initOwner    = frameTitle
+    local initOwner    = htmlEsc( frameTitle )
     local initVolume   = radio:GetRadioVolume() or 1
     local initLooping  = radio:GetLooping() and "true" or "false"
 
