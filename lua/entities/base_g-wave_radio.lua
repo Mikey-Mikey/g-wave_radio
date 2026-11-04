@@ -17,6 +17,47 @@ ENT.BarHeights = {}
 ENT.AverageVol = 0
 ENT.MaxQueueSize = 32
 
+local function extractHost( url )
+    if not isstring( url ) then return nil end
+
+    local scheme, rest = string.match( url, "^(%a[%w+%.%-]*)://(.+)$" )
+    if not scheme then return nil end
+
+    scheme = string.lower( scheme )
+    if scheme ~= "http" and scheme ~= "https" then return nil end
+
+    rest = string.match( rest, "^[^/?#]*@(.+)$" ) or rest
+
+    local host = string.match( rest, "^[^/:?#]+" )
+    if not host then return nil end
+
+    host = string.gsub( host, "%.+$", "" )
+
+    return string.lower( host )
+end
+
+local function hostMatchesDomain( host, domain )
+    domain = string.lower( domain )
+    if string.sub( domain, 1, 1 ) == "." then
+        return string.sub( host, -#domain ) == domain
+    end
+    return host == domain or string.sub( host, -( #domain + 1 ) ) == "." .. domain
+end
+
+local function checkWhitelist( url )
+    if not GWAVE.Whitelist then return true end
+
+    local host = extractHost( url )
+    if not host then return false end
+
+    for _, domain in ipairs( GWAVE.Whitelist ) do
+        if hostMatchesDomain( host, domain ) then
+            return true
+        end
+    end
+    return false
+end
+
 if CLIENT then
     language.Add( "g-wave_radio", "G-Wave Radio" )
     language.Add( "sboxlimit_g-wave_radios", "You have hit the GWave Radio limit!" )
@@ -90,13 +131,20 @@ function ENT:TriggerInput( inputName, value )
     elseif inputName == "URL" then
         if self.QueueCooldown > 0 then return end
         self.QueueCooldown = 0.1
+        -- Wiremod inputs must pass the same whitelist as the menu
+        if not isstring( value ) or not checkWhitelist( value ) then return end
         self:SetURL( value )
     elseif inputName == "Queue" then
         if self.QueueCooldown > 0 then return end
         self.QueueCooldown = 0.1
         self.Queue = {}
+        local n = 0
         for i = 1, math.min( #value, self.MaxQueueSize ) do
-            self.Queue[i] = value[i]
+            local v = value[i]
+            if isstring( v ) and checkWhitelist( v ) then
+                n = n + 1
+                self.Queue[n] = { url = v, duration = 0 }
+            end
         end
         net.Start( "gwave_syncqueue" )
         net.WriteEntity( self )
@@ -113,9 +161,7 @@ function ENT:SetupDataTables()
     self:NetworkVar( "String", "State" )
     self:NetworkVar( "Float", "RadioVolume" )
     self:NetworkVar( "Bool", "Looping" )
-    -- PlayStartTime: server CurTime() when playback started/resumed (0 when paused/stopped)
-    -- PlayStartOffset: seek position in seconds at that moment
-    -- Current position = (CurTime() - PlayStartTime) + PlayStartOffset
+    -- Playback position: (CurTime() - PlayStartTime) + PlayStartOffset
     self:NetworkVar( "Float", "PlayStartTime" )
     self:NetworkVar( "Float", "PlayStartOffset" )
     self:NetworkVar( "Float", "Radius" )
@@ -322,16 +368,6 @@ if SERVER then
     end
 
     GWAVE.GenericDuplicatorFunction( "base_g-wave_radio" )
-
-    local function checkWhitelist( url )
-        if not GWAVE.Whitelist then return true end
-        for _, domain in ipairs( GWAVE.Whitelist ) do
-            if string.find( url, domain, 1, true ) then
-                return true
-            end
-        end
-        return false
-    end
 
     net.Receive( "gwave_operation", function( _, ply )
         local opcode = net.ReadUInt( GWAVE.OPCODECOUNT )
