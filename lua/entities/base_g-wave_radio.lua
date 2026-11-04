@@ -629,6 +629,10 @@ if CLIENT then
     function ENT:DrawTranslucent( flags )
         self:DrawModel( flags )
 
+        if WireLib then
+            Wire_Render( self )
+        end
+
         local pos = self:GetPos()
         local eyePos = EyePos()
         if pos:DistToSqr( eyePos ) > 512 ^ 2 then return end
